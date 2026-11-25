@@ -1,0 +1,13 @@
+# Yalnızca yerel geliştirme içindir. Port sadece 127.0.0.1'e bağlanır.
+services:
+  mongo:
+    image: mongo:8
+    container_name: takip-mongo-dev
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:27018:27017'
+    command: ['--wiredTigerCacheSizeGB', '0.5']
+    volumes:
+      - takip-mongo-data:/data/db
+volumes:
+  takip-mongo-data:

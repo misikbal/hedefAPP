@@ -1,0 +1,12 @@
+pnpm-lock.yaml
+dist
+node_modules
+.expo
+*.html
+tasarım_dokumani.md
+PROJE_CONTEXT.md
+apps/mobile/AGENTS.md
+design-extracted
+HANDOFF_FAZ3.md
+apps/mobile/expo-env.d.ts
+HANDOFF_FAZ4.md

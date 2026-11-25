@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.expo
+.env
+.env.*
+!.env.example
+apps/mobile
+design-extracted
+docs
+*.html
+*.md
+**/coverage
+**/*.log
+.git
