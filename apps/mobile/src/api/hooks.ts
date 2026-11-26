@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  AuditEntry,
+  AuditList,
   Block,
   BlockCreate,
   BlockHistory,
@@ -16,7 +18,10 @@ import type {
   JournalEntry,
   JournalPut,
   NotificationDto,
+  McpStatus,
   NotificationList,
+  PendingChangeDto,
+  PendingChangeList,
   SettingsDto,
   SettingsPatch,
   WeeklyReport,
@@ -60,6 +65,10 @@ export const keys = {
   unread: ['notifications', 'unread'] as const,
   settings: ['settings'] as const,
   report: (week: string) => ['reports', week] as const,
+  mcpStatus: ['mcp', 'status'] as const,
+  audit: ['mcp', 'audit'] as const,
+  pendingChanges: ['mcp', 'pending'] as const,
+  pendingChange: (id: string) => ['mcp', 'pending', id] as const,
 };
 
 export const useToday = () =>
@@ -403,6 +412,7 @@ export function useUpdateSettings() {
           ...(patch.quietHours ? { quietHours: patch.quietHours } : {}),
           ...(patch.journalReminder ? { journalReminder: patch.journalReminder } : {}),
           notif: { ...prev.notif, ...patch.notif },
+          mcpPermissions: { ...prev.mcpPermissions, ...patch.mcpPermissions },
         });
       }
       return { prev };
@@ -410,7 +420,10 @@ export function useUpdateSettings() {
     onError: (_e, _p, ctx) => {
       if (ctx?.prev) qc.setQueryData(keys.settings, ctx.prev);
     },
-    onSuccess: (s) => qc.setQueryData(keys.settings, s),
+    onSuccess: (s, patch) => {
+      qc.setQueryData(keys.settings, s);
+      if (patch.mcpPermissions) void qc.invalidateQueries({ queryKey: keys.mcpStatus });
+    },
   });
 }
 
@@ -420,3 +433,65 @@ export const useWeeklyReport = (week: string) =>
     queryKey: keys.report(week),
     queryFn: () => api<WeeklyReport>(`/reports/weekly/${week}`),
   });
+
+/* ---------- Claude (MCP) bağlantısı (Faz 6) ---------- */
+
+export const useMcpStatus = () =>
+  useQuery({
+    queryKey: keys.mcpStatus,
+    queryFn: () => api<McpStatus>('/mcp-status'),
+    refetchInterval: 60_000,
+  });
+
+export const useClaudeAudit = (limit = 30) =>
+  useQuery({
+    queryKey: [...keys.audit, limit],
+    queryFn: () => api<AuditList>(`/audit?actor=mcp&limit=${limit}`),
+  });
+
+export const usePendingChanges = (status = 'pending') =>
+  useQuery({
+    queryKey: [...keys.pendingChanges, 'list', status],
+    queryFn: () => api<PendingChangeList>(`/pending-changes?status=${status}`),
+  });
+
+export const usePendingChange = (id: string) =>
+  useQuery({
+    queryKey: keys.pendingChange(id),
+    queryFn: () => api<PendingChangeDto>(`/pending-changes/${id}`),
+  });
+
+/**
+ * Claude'un (ya da onayın) değiştirdiği her şey: program, hedefler, ilerleme, cezalar, günlük.
+ * Geri al / yinele / onayla hangi varlığa dokunduğunu söylemediği için hepsi yenilenir.
+ * Blok hatırlatmaları, başarılı her mutasyondan sonra NotificationsLifecycle'ta yeniden kurulur.
+ */
+function invalidateClaudeChanges(qc: QueryClient) {
+  invalidateSchedule(qc);
+  invalidateProgress(qc);
+  invalidatePenalties(qc);
+  invalidateRules(qc);
+  void qc.invalidateQueries({ queryKey: keys.journal });
+  void qc.invalidateQueries({ queryKey: keys.mcpStatus });
+  void qc.invalidateQueries({ queryKey: keys.audit });
+  void qc.invalidateQueries({ queryKey: keys.pendingChanges });
+}
+
+export function useAuditUndo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'undo' | 'redo' }) =>
+      api<AuditEntry>(`/audit/${id}/${action}`, { method: 'POST' }),
+    onSettled: () => invalidateClaudeChanges(qc),
+  });
+}
+
+export function useDecidePendingChange(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (decision: 'approve' | 'reject') =>
+      api<PendingChangeDto>(`/pending-changes/${id}/${decision}`, { method: 'POST' }),
+    onSuccess: (dto) => qc.setQueryData(keys.pendingChange(id), dto),
+    onSettled: () => invalidateClaudeChanges(qc),
+  });
+}

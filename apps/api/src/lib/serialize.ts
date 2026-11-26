@@ -11,6 +11,7 @@ import {
   type ProgressLog as ProgressLogDto,
   type NotificationDto,
   type SettingsDto,
+  type McpPermissions,
 } from '@takip/shared';
 import type {
   BlockDoc,
@@ -182,5 +183,17 @@ export function toSettingsDto(s: SettingsDoc): SettingsDto {
     quietHours: { start: s.quietHours?.start ?? '00:00', end: s.quietHours?.end ?? '06:30' },
     journalReminder: s.journalReminder ?? '23:00',
     skipAllowancePerWeek: s.skipAllowancePerWeek ?? 1,
+    mcpPermissions: mcpPermissionsOf(s),
+  };
+}
+
+/** Eksik alanlar model varsayılanlarıyla doldurulur (blok ekleme doğrudan, silme ve kural onaylı). */
+export function mcpPermissionsOf(s: SettingsDoc): McpPermissions {
+  const p = s.mcpPermissions;
+  return {
+    blockWrite: p?.blockWrite === 'approve' ? 'approve' : 'auto',
+    blockDelete: p?.blockDelete === 'auto' ? 'auto' : 'approve',
+    penaltyRuleWrite: p?.penaltyRuleWrite === 'auto' ? 'auto' : 'approve',
+    journalRead: p?.journalRead === true,
   };
 }

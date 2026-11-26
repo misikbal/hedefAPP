@@ -25,6 +25,11 @@ export async function updateSettings(userId: Types.ObjectId | string, patch: Set
       if (typeof v === 'boolean') s.set(`notif.${k}`, v);
     }
   }
+  if (patch.mcpPermissions) {
+    for (const [k, v] of Object.entries(patch.mcpPermissions)) {
+      if (v !== undefined) s.set(`mcpPermissions.${k}`, v);
+    }
+  }
   await s.save();
   return s;
 }

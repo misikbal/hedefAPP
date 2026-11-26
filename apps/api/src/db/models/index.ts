@@ -12,3 +12,5 @@ export * from './JournalEntry.js';
 export * from './Notification.js';
 export * from './DeviceToken.js';
 export * from './WeeklyReport.js';
+export * from './AuditLog.js';
+export * from './PendingChange.js';

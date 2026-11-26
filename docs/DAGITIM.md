@@ -58,7 +58,7 @@ PORT=3000
 MONGODB_URI=mongodb://takip_app:<şifre>@<iç-servis-adı>:27017/takip?authSource=takip
 JWT_ACCESS_SECRET=<openssl rand -base64 64>
 JWT_REFRESH_SECRET=<openssl rand -base64 64>
-MCP_SECRET=<openssl rand -base64 48 | tr '+/' '-_' | tr -d '='>   # Faz 6 atlandı; yine de zorunlu
+MCP_SECRET=<openssl rand -base64 48 | tr '+/' '-_' | tr -d '='>   # en az 32 karakter, url-safe (A-Z a-z 0-9 _ -); Claude bağlantısı, §4.1
 APP_TIMEZONE=Europe/Istanbul
 LOG_LEVEL=info
 TRUST_PROXY=true
@@ -72,6 +72,22 @@ ADMIN_PASSWORD=<ilk girişten sonra SİL ve yeniden deploy et>
 9. Kontrol: `curl https://takip.<alan-adı>/health` → `{"ok":true,"db":"up",...}`
 
 Tek API kopyası çalıştır (Agenda işleri; rate limit sayacı bellekte).
+
+### 4.1 Claude (MCP) bağlantısı
+
+- Uç nokta: `https://takip.<alan-adı>/api/v1/mcp/<MCP_SECRET>` (Streamable HTTP, stateless; yalnızca POST, GET/DELETE 405).
+- claude.ai → Ayarlar → Bağlayıcılar → **Özel bağdaştırıcı ekle** → bu adresi yapıştır. OAuth alanlarını boş bırak
+  (Aşama 1: kimlik yoldaki anahtardır; `/.well-known/...` istekleri 404 döner, bu normal).
+- İstekler `ADMIN_EMAIL` kullanıcısı adına çalışır; tanımlı değilse en eski kullanıcı.
+- Adres uygulamada Ayarlar → Claude bağlantısı ekranında da görünür (kopyala düğmesi). Anahtar loglarda `/mcp/***` olarak maskelenir.
+- Anahtar sızarsa: yeni `MCP_SECRET` üret → Coolify'da değiştir → yeniden deploy → claude.ai'deki bağlayıcıyı yeni adresle yeniden ekle.
+- Kontrol (initialize):
+  ```bash
+  curl -s https://takip.<alan-adı>/api/v1/mcp/<MCP_SECRET> \
+    -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
+  ```
+  `"serverInfo":{"name":"takip"...}` dönmeli; yanlış anahtarla 404.
 
 ## 5. Release APK (EAS)
 
@@ -94,3 +110,4 @@ Release build yalnızca HTTPS'e bağlanır (Android cleartext'i engeller); adres
 - [ ] MongoDB dışarıdan erişilemiyor: `nc -vz <vps-ip> 27017` başarısız olmalı.
 - [ ] Yedek S3'te; yedekten geri yükleme bir kez denendi (§3.3).
 - [ ] Üst üste 11 yanlış girişte 429 dönüyor.
+- [ ] claude.ai bağlayıcısı bağlandı; "yarın 7'de 30 km bisiklet ekle" programa düştü; blok silme telefondan onay istedi.

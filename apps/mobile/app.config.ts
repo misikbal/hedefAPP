@@ -11,13 +11,15 @@ const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
  * `GOOGLE_SERVICES_JSON` ile verilir: EAS Build'de dosya türünde ortam değişkeni, yerel
  * build'de `./google-services.json` (git'e girmez). Kurulum: docs/BILDIRIM_KURULUMU.md
  */
-const easProjectId = process.env.EAS_PROJECT_ID;
+// Gizli değil: EAS proje kimliği (@kodmis/takip). Ortamdan verilirse o kullanılır.
+const easProjectId = process.env.EAS_PROJECT_ID ?? '3d98e565-faf3-4e2a-91fc-1179adc7aa0b';
 const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Takip',
   slug: 'takip',
+  owner: 'kodmis',
   scheme: 'takip',
   version: '0.1.0',
   orientation: 'portrait',
@@ -46,5 +48,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   experiments: { typedRoutes: true },
-  extra: { apiUrl, ...(easProjectId ? { eas: { projectId: easProjectId } } : {}) },
+  extra: { apiUrl, eas: { projectId: easProjectId } },
 });

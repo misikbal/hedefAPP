@@ -18,3 +18,4 @@ export * from './schemas/journal.js';
 export * from './notifications.js';
 export * from './schemas/notification.js';
 export * from './reminders.js';
+export * from './schemas/mcp.js';

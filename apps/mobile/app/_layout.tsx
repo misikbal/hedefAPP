@@ -39,6 +39,8 @@ function RootStack() {
           <Stack.Screen name="journal/calendar" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="reports/[week]" />
+          <Stack.Screen name="claude/index" />
+          <Stack.Screen name="claude/pending/[id]" />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="login" />

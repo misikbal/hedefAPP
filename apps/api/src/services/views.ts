@@ -14,6 +14,7 @@ import {
 } from '@takip/shared';
 import { Block, BlockInstance, type BlockDoc, type BlockInstanceDoc } from '../db/models/index.js';
 import { toInstanceDto, toPenaltyDto } from '../lib/serialize.js';
+import { lastClaudeChange } from './audit.js';
 import { clock } from './clock.js';
 import { getBlock } from './blocks.js';
 import { listGoals } from './goals.js';
@@ -70,7 +71,7 @@ export async function getToday(user: UserContext): Promise<TodayResponse> {
     goals: await goalSummaries(user, await listGoals(user)),
     pendingPenalty: pending ? toPenaltyDto(pending) : null,
     note: noteFor(instances),
-    lastClaudeChange: null,
+    lastClaudeChange: await lastClaudeChange(user),
     skip: await skipAllowanceForWeek(user.id, weekStart),
   };
 }

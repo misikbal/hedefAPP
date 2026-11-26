@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CATEGORIES } from '../constants.js';
 import { goalSummarySchema } from './goal.js';
+import { auditEntrySchema } from './mcp.js';
 import { penaltySchema } from './penalty.js';
 
 export const INSTANCE_STATUSES = ['planned', 'done', 'missed', 'skipped'] as const;
@@ -34,7 +35,8 @@ export const todayResponseSchema = z.object({
   /** Süresi en yakın dolacak açık ceza */
   pendingPenalty: penaltySchema.nullable(),
   note: z.string().nullable(),
-  lastClaudeChange: z.unknown().nullable(),
+  /** Claude'un (MCP) geri alınmamış son değişikliği */
+  lastClaudeChange: auditEntrySchema.nullable(),
   skip: skipAllowanceSchema,
 });
 export type TodayResponse = z.infer<typeof todayResponseSchema>;

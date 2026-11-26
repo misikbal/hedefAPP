@@ -11,6 +11,7 @@ import {
 import { ApiError, api } from '@/api/client';
 import { keys } from '@/api/hooks';
 import { queryClient } from '@/api/queryClient';
+import { hideFocusPanel, updateFocusPanel } from '@/notifications/focusPanel';
 import { cancelLocal, scheduleLocal } from '@/notifications/local';
 import { focusNow, resetFocusDevice, setFocus, useFocusStore } from '@/store/focusStore';
 
@@ -44,6 +45,7 @@ async function rescheduleEnd(s: FocusSession | null) {
     );
   }
   setFocus({ endNotificationId: id });
+  void updateFocusPanel(s);
 }
 
 function apply(s: FocusSession | null): FocusSession | null {
@@ -150,6 +152,7 @@ export async function endFocusOnLogout(): Promise<void> {
   }
   await cancelLocal(st.endNotificationId);
   await cancelLocal(st.breakNotificationId);
+  await hideFocusPanel();
   resetFocusDevice();
 }
 

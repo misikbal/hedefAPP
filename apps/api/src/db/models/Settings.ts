@@ -26,6 +26,9 @@ const settingsSchema = new Schema(
       penaltyRuleWrite: { ...permission, default: 'approve' },
       journalRead: { type: Boolean, default: false },
     },
+    /** Son başarılı MCP isteği (Claude bağlantısı ekranı) */
+    mcpLastAccessAt: { type: Date, default: null },
+    mcpLastTool: { type: String, default: null },
   },
   { timestamps: true },
 );

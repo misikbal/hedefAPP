@@ -5,6 +5,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { addDays, localDateOf, weekStartOf } from '@takip/shared';
 import { User } from '../db/models/index.js';
 import { abandonStaleSessions } from '../services/focus.js';
+import { expirePendingChanges } from '../services/pendingChanges.js';
 import { runPenaltyEngine } from '../services/penaltyEngine.js';
 import { ensureWeek } from '../services/schedule.js';
 import { runNotificationTick, runWeeklyReports } from '../services/scheduledNotifications.js';
@@ -58,6 +59,9 @@ export async function startJobs(log: FastifyBaseLogger, timezone: string): Promi
     async () => {
       const r = await runNotificationTick();
       if (r.journal || r.motivation || r.flushed) log.info(r, 'bildirim işi çalıştı');
+      // Onay bekleyen Claude değişiklikleri 24 saatte düşer (okumada da tembel olarak yapılır).
+      const expired = await expirePendingChanges();
+      if (expired) log.info({ expired }, 'süresi dolan onay istekleri kapatıldı');
     },
     { concurrency: 1, lockLifetime: 5 * 60_000 },
   );

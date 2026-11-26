@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { THEME_PREFERENCES } from '../constants.js';
 import { MOTIVATION_FREQS, NOTIFICATION_TYPES } from '../notifications.js';
 import { objectIdSchema, timeOfDaySchema } from './common.js';
+import { MCP_PERMISSION_MODES, mcpPermissionsSchema } from './mcp.js';
 
 export const notificationSchema = z.object({
   id: z.string(),
@@ -52,6 +53,7 @@ export const settingsSchema = z.object({
   quietHours: z.object({ start: z.string(), end: z.string() }),
   journalReminder: z.string(),
   skipAllowancePerWeek: z.number(),
+  mcpPermissions: mcpPermissionsSchema,
 });
 export type SettingsDto = z.infer<typeof settingsSchema>;
 
@@ -69,6 +71,15 @@ export const settingsPatchSchema = z
     motivationFreq: z.enum(MOTIVATION_FREQS),
     quietHours: z.object({ start: timeOfDaySchema, end: timeOfDaySchema }),
     journalReminder: timeOfDaySchema,
+    mcpPermissions: z
+      .object({
+        blockWrite: z.enum(MCP_PERMISSION_MODES),
+        blockDelete: z.enum(MCP_PERMISSION_MODES),
+        penaltyRuleWrite: z.enum(MCP_PERMISSION_MODES),
+        journalRead: z.boolean(),
+      })
+      .partial()
+      .strict(),
   })
   .partial()
   .strict();

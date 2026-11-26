@@ -1,4 +1,5 @@
 import {
+  AuditLog,
   Block,
   BlockInstance,
   FocusSession,
@@ -7,6 +8,7 @@ import {
   Notification,
   Penalty,
   PenaltyRule,
+  PendingChange,
   ProgressLog,
   Settings,
   User,
@@ -42,6 +44,8 @@ export async function exportAll(user: UserContext) {
     journal,
     notifications,
     weeklyReports,
+    auditLog,
+    pendingChanges,
   ] = await Promise.all([
     Settings.findOne(q).lean(),
     Block.find(q).lean(),
@@ -54,6 +58,8 @@ export async function exportAll(user: UserContext) {
     JournalEntry.find(q).sort({ date: 1 }).lean(),
     Notification.find(q).select('-push').sort({ sentAt: 1 }).lean(),
     WeeklyReport.find(q).sort({ isoWeek: 1 }).lean(),
+    AuditLog.find(q).sort({ createdAt: 1 }).lean(),
+    PendingChange.find(q).sort({ createdAt: 1 }).lean(),
   ]);
   return {
     app: 'takip',
@@ -71,5 +77,7 @@ export async function exportAll(user: UserContext) {
     journal: clean(journal),
     notifications: clean(notifications),
     weeklyReports: clean(weeklyReports),
+    auditLog: clean(auditLog),
+    pendingChanges: clean(pendingChanges),
   };
 }

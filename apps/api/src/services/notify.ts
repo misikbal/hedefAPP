@@ -3,7 +3,9 @@ import { deliver, type DeliverInput } from './notifications.js';
 
 /**
  * Sunucu olayları. Her olay bir Notification kaydına ve (ayar açıksa) Expo push'una dönüşür.
- * Claude değişiklikleri (Faz 6) buraya eklenecek.
+ * Claude (MCP) olayları `claude` türündedir ve bir ayar anahtarına bağlı değildir (her zaman
+ * gönderilir): onay isteği kullanıcıdan işlem bekler, doğrudan değişiklik bildirimi saatte birle
+ * sınırlıdır (dedupeKey saat dilimini içerir).
  */
 export type NotifyEvent =
   | { type: 'penalty_created'; penaltyId: string; title: string; body: string }
@@ -17,7 +19,9 @@ export type NotifyEvent =
   | { type: 'penalty_due_soon'; penaltyId: string; dueKey: string; title: string; body: string }
   | { type: 'motivation'; dedupeKey: string; title: string; body: string; deepLink: string }
   | { type: 'journal_reminder'; date: string }
-  | { type: 'weekly_report'; isoWeek: string; title: string; body: string };
+  | { type: 'weekly_report'; isoWeek: string; title: string; body: string }
+  | { type: 'claude_pending'; pendingId: string; title: string; body: string }
+  | { type: 'claude_change'; dedupeKey: string; title: string; body: string };
 
 export function toDeliverInput(e: NotifyEvent): DeliverInput {
   switch (e.type) {
@@ -79,6 +83,26 @@ export function toDeliverInput(e: NotifyEvent): DeliverInput {
         body: e.body,
         deepLink: `/reports/${e.isoWeek}`,
         dedupeKey: `weekly_report:${e.isoWeek}`,
+        setting: null,
+      };
+    case 'claude_pending':
+      return {
+        type: 'claude',
+        kind: e.type,
+        title: e.title,
+        body: e.body,
+        deepLink: `/claude/pending/${e.pendingId}`,
+        dedupeKey: `claude_pending:${e.pendingId}`,
+        setting: null,
+      };
+    case 'claude_change':
+      return {
+        type: 'claude',
+        kind: e.type,
+        title: e.title,
+        body: e.body,
+        deepLink: '/claude',
+        dedupeKey: e.dedupeKey,
         setting: null,
       };
   }

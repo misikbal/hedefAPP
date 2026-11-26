@@ -1,7 +1,13 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { remainingText } from '@takip/shared';
-import { useInstanceAction, useToday, useUnreadCount } from '@/api/hooks';
+import {
+  useAuditUndo,
+  useInstanceAction,
+  useMcpStatus,
+  useToday,
+  useUnreadCount,
+} from '@/api/hooks';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { IconButton } from '@/components/IconButton';
@@ -9,6 +15,7 @@ import { BellIcon, GearIcon, PenaltyIcon, PlusIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { ErrorCard, Loading } from '@/components/StateViews';
 import { Txt } from '@/components/Txt';
+import { whenLabel } from '@/features/claude/format';
 import { GoalMetric } from '@/features/goals/GoalMetric';
 import { TaskRow } from '@/features/schedule/TaskRow';
 import { greeting, todayEyebrow } from '@/lib/date';
@@ -26,6 +33,9 @@ export default function TodayScreen() {
   const pending = today.data?.pendingPenalty;
   const now = useNow(60_000);
   const unread = useUnreadCount().data?.unread ?? 0;
+  const claudePending = useMcpStatus().data?.pendingCount ?? 0;
+  const claudeUndo = useAuditUndo();
+  const lastClaude = today.data?.lastClaudeChange ?? null;
 
   return (
     <Screen
@@ -80,6 +90,28 @@ export default function TodayScreen() {
             </Txt>
           </View>
           <Txt style={{ fontFamily: fonts.mono, fontSize: 12, color: c.penTx }}>Aç</Txt>
+        </Pressable>
+      ) : null}
+
+      {claudePending > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint="Claude bağlantısı ekranını açar"
+          onPress={() => router.push('/claude')}
+          style={({ pressed }) => [
+            styles.claude,
+            { backgroundColor: c.s2, borderColor: c.acc, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <View style={[styles.claudeDot, { backgroundColor: c.acc }]} />
+          <Txt style={{ flex: 1, fontSize: 14, fontFamily: fonts.bodyMedium }}>
+            {claudePending === 1
+              ? 'Claude onay bekliyor'
+              : `Claude ${claudePending} değişiklik için onay bekliyor`}
+          </Txt>
+          <Txt style={{ fontSize: 13 }} color="accTx">
+            İncele
+          </Txt>
         </Pressable>
       ) : null}
 
@@ -147,6 +179,52 @@ export default function TodayScreen() {
           ))}
         </View>
       ) : null}
+      {lastClaude ? (
+        <Card style={{ gap: 6 }}>
+          <Txt variant="label" color="mut">
+            CLAUDE'UN SON DEĞİŞİKLİĞİ
+          </Txt>
+          <View style={styles.claudeLast}>
+            <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+              <Txt
+                style={{
+                  fontSize: 14,
+                  lineHeight: 20,
+                  textDecorationLine: lastClaude.undoneAt ? 'line-through' : 'none',
+                }}
+                color={lastClaude.undoneAt ? 'mut' : 'tx'}
+              >
+                {lastClaude.summary}
+              </Txt>
+              <Txt style={{ fontFamily: fonts.mono, fontSize: 11 }} color="mut">
+                {`${whenLabel(lastClaude.createdAt)}${lastClaude.tool ? ` · ${lastClaude.tool}` : ''}`}
+              </Txt>
+            </View>
+            {lastClaude.canUndo || lastClaude.canRedo ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${lastClaude.canUndo ? 'Geri al' : 'Yinele'}: ${lastClaude.summary}`}
+                disabled={claudeUndo.isPending}
+                onPress={() =>
+                  claudeUndo.mutate({
+                    id: lastClaude.id,
+                    action: lastClaude.canUndo ? 'undo' : 'redo',
+                  })
+                }
+                style={[
+                  styles.pill,
+                  { borderColor: c.line, opacity: claudeUndo.isPending ? 0.5 : 1 },
+                ]}
+              >
+                <Txt style={{ fontSize: 13, color: c.accTx, fontFamily: fonts.body }}>
+                  {lastClaude.canUndo ? 'Geri al' : 'Yinele'}
+                </Txt>
+              </Pressable>
+            ) : null}
+          </View>
+          {claudeUndo.isError ? <ErrorCard error={claudeUndo.error} /> : null}
+        </Card>
+      ) : null}
       {action.isError ? <ErrorCard error={action.error} /> : null}
     </Screen>
   );
@@ -172,6 +250,17 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
+  claude: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  claudeDot: { width: 10, height: 10, borderRadius: 5 },
+  claudeLast: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   pill: {
     height: 36,

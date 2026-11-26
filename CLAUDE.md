@@ -27,6 +27,7 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - Faz 3 — Cezalar: tamamlandı (2026-11-25, kullanıcı onayladı). Kararlar aşağıda.
 - Faz 4 — Odak ve günlük: kodlandı (2026-11-25), kullanıcı onayı bekleniyor. Kararlar aşağıda.
 - Faz 5 — Bildirimler: sırada (onaydan sonra)
+- Faz 6 — MCP (Claude): kodlandı (2026-11-26), kullanıcı onayı bekleniyor. Kararlar aşağıda.
 
 ## Notlar
 
@@ -41,6 +42,7 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - Günlük hedeflerin geçmiş grafiği haftalık günlük ortalamadır (tasarımdaki gibi).
 - Odak: süre hesabı tek yerde (`@takip/shared` → `focusElapsedMs`); seansın günü `startedAt`'in yerel günü (`FocusSession.date`). Mobil sayaç `src/store/focusStore.ts` (kalıcı) + `src/features/focus/actions.ts` (imperatif; AppState ve çıkış da kullanır) + `FocusLifecycle` (kökte, oturum açıkken).
 - `POST /focus/:id/finish` idempotenttir: ilk çağrı seansı bitirip hedefe yazar, sonrakiler yalnızca not/bölünme günceller (Odak bitti ekranı böyle çalışır).
+- Odak paneli: seans açıkken kalıcı (sticky) yerel bildirim, `src/notifications/focusPanel.ts`; bitiş saati + bugünün hedefleri + açık cezalar. Sessiz `focus_panel` kanalı; seans durumu, `today` ya da ceza sorgusu değişince yenilenir. Canlı geri sayım yok (expo-notifications desteklemiyor).
 - `abandoned` (Sıfırla ya da 6 saat unutulan) seans hedefe yazılmaz ve zirvelerde görünmez.
 
 ## Faz 3 kararları (kullanıcı onayladı, 2026-11-25)
@@ -91,3 +93,14 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - Ayarlar ekranı tasarımdaki gibi tamamlandı (Claude satırı pasif, ceza kuralları bağlantısı, hafta başlangıcı sabit Pazartesi, Yedeği indir). Tema hâlâ cihazda (`themeStore`); sunucudaki `theme` alanı kullanılmıyor.
 - EAS: `production` profili APK + `autoIncrement`; API adresi EAS ortam değişkeni `EXPO_PUBLIC_API_URL` (https). Adımlar: `docs/DAGITIM.md`.
 - Testlerde mongodb-memory-server `launchTimeout` 60 sn (12 dosya paralel mongod açıyor).
+
+## Faz 6 kararları (2026-11-26, onay bekliyor)
+
+- Uç nokta `/api/v1/mcp/<MCP_SECRET>` (`src/mcp/routes.ts`): Streamable HTTP, stateless (her POST yeni McpServer + transport, JSON yanıt), GET/DELETE 405. Anahtar sabit zamanlı karşılaştırılır; yanlışsa 404. OAuth yok (Aşama 1). `@modelcontextprotocol/sdk` 1.32.2. Log maskesi hem `/mcp/` hem `/api/v1/mcp/` yolunu kapsar.
+- Kullanıcı: `ADMIN_EMAIL` kullanıcısı, yoksa en eski kullanıcı; hiç yoksa 503 `MCP_NO_USER`.
+- Sözleşme `@takip/shared → schemas/mcp.ts`. Araçlar `src/mcp/server.ts` (16 araç), yazmalar `src/mcp/actions.ts → performWrite` (uygula + AuditLog + bildirim). Yalnızca `actor:'mcp'` değişiklikleri AuditLog'a yazılır.
+- İzinler `Settings.mcpPermissions` (varsayılan: blok yazma auto, blok silme ve ceza kuralı approve, günlük okuma kapalı). approve → `PendingChange` (24 saat); okumada ve `notification-tick`te süresi geçenler `expired`; süresi geçmişi onaylamak 409.
+- Geri al / Yinele (`services/audit.ts`): aynı varlıkta daha yeni geri alınmamış kayıt varsa kapalı; undo için belge `after`'a, redo için `before`'a eşit olmalı (uygulamada düzenlenen kaydın Claude değişikliği geri alınamaz). Oluşturmanın geri alınması: geçmişi olan blok/hedef arşivlenir, yoksa silinir.
+- `update_block` / `delete_block` her zaman şimdiden itibaren bütün gelecek haftalara uygulanır (`this_week` kapsamı yok).
+- Bildirim türü `claude`, ayar anahtarına bağlı değil: onay isteği (`/claude/pending/<id>`) ve doğrudan değişiklik (saatte en çok bir, `/claude`).
+- Mobil: `app/claude/index.tsx` (bağlantı, geçmiş, izinler), `app/claude/pending/[id].tsx` (onay), Bugün'de son değişiklik kartı ve onay şeridi. `expo-clipboard` eklendi. Anahtar yenileme yalnız ortam değişkeni + deploy ile (`docs/DAGITIM.md` §4.1).

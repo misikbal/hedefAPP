@@ -6,7 +6,7 @@ import type { MotivationFreq, SettingsDto } from '@takip/shared';
 import { api } from '@/api/client';
 import { queryClient } from '@/api/queryClient';
 import { API_URL } from '@/api/config';
-import { usePenaltyRules, useSettings, useUpdateSettings } from '@/api/hooks';
+import { useMcpStatus, usePenaltyRules, useSettings, useUpdateSettings } from '@/api/hooks';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Segmented } from '@/components/Segmented';
@@ -216,14 +216,25 @@ function LinkRow({
   );
 }
 
-/** Claude (Faz 6 atlandı), ceza kuralları, hafta başlangıcı */
+/** Claude bağlantısı (MCP), ceza kuralları, hafta başlangıcı */
 function LinksGroup() {
   const { c } = useTheme();
   const rules = usePenaltyRules();
+  const mcp = useMcpStatus();
   const enabled = rules.data?.filter((r) => r.enabled).length;
+  const mcpValue = !mcp.data
+    ? ''
+    : mcp.data.enabled && mcp.data.lastAccessAt
+      ? 'Bağlı'
+      : 'Kurulmadı';
   return (
     <View style={[styles.group, { backgroundColor: c.s1, borderColor: c.line }]}>
-      <LinkRow first label="Claude bağlantısı (MCP)" value="Kurulmadı" />
+      <LinkRow
+        first
+        label="Claude bağlantısı (MCP)"
+        value={mcpValue}
+        onPress={() => router.push('/claude')}
+      />
       <LinkRow
         label="Ceza kuralları"
         value={enabled === undefined ? '' : enabled ? `${enabled} kural açık` : 'Kural yok'}

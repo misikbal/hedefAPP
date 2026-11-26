@@ -10,12 +10,16 @@ export const SUPPORTED = Platform.OS !== 'web';
 
 if (SUPPORTED) {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (n) => {
+      // Odak paneli (focusPanel.ts) sessizce çekmecede durur; afiş ve ses yok.
+      const quiet = (n.request.content.data as { kind?: string } | null)?.kind === 'focus_panel';
+      return {
+        shouldShowBanner: !quiet,
+        shouldShowList: true,
+        shouldPlaySound: !quiet,
+        shouldSetBadge: false,
+      };
+    },
   });
 }
 

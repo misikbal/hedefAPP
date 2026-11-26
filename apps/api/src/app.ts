@@ -19,15 +19,24 @@ import { notificationRoutes } from './modules/notifications/routes.js';
 import { reportRoutes } from './modules/reports/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 import { requireAuth } from './plugins/auth.js';
+import { mcpRoutes } from './mcp/routes.js';
+import { claudeRoutes } from './modules/claude/routes.js';
 
 export type AppConfig = Pick<
   Env,
   'LOG_LEVEL' | 'NODE_ENV' | 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET'
 > &
-  Partial<Pick<Env, 'CORS_ORIGINS' | 'TRUST_PROXY' | 'RATE_LIMIT_MAX'>> & {
+  Partial<
+    Pick<Env, 'CORS_ORIGINS' | 'TRUST_PROXY' | 'RATE_LIMIT_MAX' | 'MCP_SECRET' | 'ADMIN_EMAIL'>
+  > & {
     /** Testlerde varsayılan kapalı (çok sayıda giriş isteği atılır); üretimde her zaman açık. */
     rateLimit?: boolean;
   };
+
+/** MCP gizli anahtarı yolda bulunur; loglarda maskelenir (kökte ve /api/v1 altında). */
+export function maskUrl(url: string): string {
+  return url.replace(/^((?:\/api\/v1)?\/mcp\/)[^/?#]+/, '$1***');
+}
 
 export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -55,7 +64,7 @@ export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
             serializers: {
               req: (req: { method: string; url: string }) => ({
                 method: req.method,
-                url: req.url.replace(/^\/mcp\/[^/?]+/, '/mcp/***'),
+                url: maskUrl(req.url),
               }),
             },
             ...(env.NODE_ENV === 'development'
@@ -103,6 +112,10 @@ export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
     async (v1) => {
       await v1.register(healthRoutes);
       await v1.register(authRoutes(secrets));
+      // Claude (MCP): oturum yerine yoldaki gizli anahtar (Aşama 1).
+      if (env.MCP_SECRET) {
+        await v1.register(mcpRoutes({ secret: env.MCP_SECRET, adminEmail: env.ADMIN_EMAIL }));
+      }
       await v1.register(async (secured) => {
         requireAuth(secured, secrets.accessSecret);
         await secured.register(scheduleRoutes);
@@ -117,6 +130,7 @@ export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
         await secured.register(reportRoutes);
         await secured.register(settingsRoutes);
         await secured.register(exportRoutes);
+        await secured.register(claudeRoutes({ mcpSecret: env.MCP_SECRET }));
       });
     },
     { prefix: '/api/v1' },

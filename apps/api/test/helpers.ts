@@ -13,6 +13,7 @@ export const TEST_CONFIG = {
   LOG_LEVEL: 'silent',
   JWT_ACCESS_SECRET: 'a'.repeat(40),
   JWT_REFRESH_SECRET: 'b'.repeat(40),
+  MCP_SECRET: 'm'.repeat(40),
 } as const;
 export const ADMIN = { email: 'ben@example.com', password: 'gizli-sifre-123' };
 
