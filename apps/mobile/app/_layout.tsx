@@ -11,6 +11,7 @@ import { NotificationsLifecycle } from '@/notifications/NotificationsLifecycle';
 import { useAuthStore } from '@/store/authStore';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { fontAssets } from '@/theme/typography';
+import { WidgetLifecycle } from '@/widget/WidgetLifecycle';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -23,6 +24,7 @@ function RootStack() {
       <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
       {signedIn ? <FocusLifecycle /> : null}
       {signedIn ? <NotificationsLifecycle /> : null}
+      {signedIn ? <WidgetLifecycle /> : null}
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
@@ -36,11 +38,21 @@ function RootStack() {
           <Stack.Screen name="progress/new" />
           <Stack.Screen name="penalties/rules/new" />
           <Stack.Screen name="focus/done" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="focus/blocking" />
+          <Stack.Screen
+            name="focus/blocked"
+            options={{ gestureEnabled: false, animation: 'fade' }}
+          />
           <Stack.Screen name="journal/calendar" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="reports/[week]" />
           <Stack.Screen name="claude/index" />
           <Stack.Screen name="claude/pending/[id]" />
+          <Stack.Screen name="strava" />
+          <Stack.Screen name="money/new" />
+          <Stack.Screen name="money/[id]" />
+          <Stack.Screen name="money/year" />
+          <Stack.Screen name="money/budgets" />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="login" />

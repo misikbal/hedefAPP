@@ -14,6 +14,7 @@ import { queryClient } from '@/api/queryClient';
 import { hideFocusPanel, updateFocusPanel } from '@/notifications/focusPanel';
 import { cancelLocal, scheduleLocal } from '@/notifications/local';
 import { focusNow, resetFocusDevice, setFocus, useFocusStore } from '@/store/focusStore';
+import { stopGuard, syncGuard } from './guard';
 
 /**
  * Odak seansı eylemleri. Bileşenlerden, AppState dinleyicisinden ve çıkıştan çağrılır;
@@ -32,6 +33,8 @@ function invalidateFocus() {
 }
 
 async function rescheduleEnd(s: FocusSession | null) {
+  // Uygulama engeli seans durumunu izler (başlat, duraklat, devam, bitir, sıfırla, eşitle).
+  syncGuard(s);
   const st = useFocusStore.getState();
   await cancelLocal(st.endNotificationId);
   let id: string | null = null;
@@ -153,6 +156,7 @@ export async function endFocusOnLogout(): Promise<void> {
   await cancelLocal(st.endNotificationId);
   await cancelLocal(st.breakNotificationId);
   await hideFocusPanel();
+  stopGuard();
   resetFocusDevice();
 }
 

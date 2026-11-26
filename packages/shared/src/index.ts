@@ -19,3 +19,5 @@ export * from './notifications.js';
 export * from './schemas/notification.js';
 export * from './reminders.js';
 export * from './schemas/mcp.js';
+export * from './schemas/strava.js';
+export * from './schemas/money.js';

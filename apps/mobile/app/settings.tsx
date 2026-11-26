@@ -6,7 +6,13 @@ import type { MotivationFreq, SettingsDto } from '@takip/shared';
 import { api } from '@/api/client';
 import { queryClient } from '@/api/queryClient';
 import { API_URL } from '@/api/config';
-import { useMcpStatus, usePenaltyRules, useSettings, useUpdateSettings } from '@/api/hooks';
+import {
+  useMcpStatus,
+  usePenaltyRules,
+  useSettings,
+  useStravaStatus,
+  useUpdateSettings,
+} from '@/api/hooks';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Segmented } from '@/components/Segmented';
@@ -16,9 +22,11 @@ import { Switch } from '@/components/Switch';
 import { TimeField } from '@/components/TimeField';
 import { ForwardIcon } from '@/components/icons';
 import { Txt } from '@/components/Txt';
+import { isGuardSupported } from '@/features/focus/guard';
 import { downloadBackup } from '@/features/settings/backup';
 import { registerForPush } from '@/notifications/push';
 import { useAuthStore } from '@/store/authStore';
+import { useGuardStore } from '@/store/guardStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
 import { fonts } from '@/theme/typography';
@@ -216,11 +224,21 @@ function LinkRow({
   );
 }
 
-/** Claude bağlantısı (MCP), ceza kuralları, hafta başlangıcı */
+/** Claude bağlantısı (MCP), Strava, odak engeli, ceza kuralları, hafta başlangıcı */
 function LinksGroup() {
   const { c } = useTheme();
   const rules = usePenaltyRules();
   const mcp = useMcpStatus();
+  const strava = useStravaStatus();
+  const guardEnabled = useGuardStore((g) => g.enabled);
+  const guardSupported = isGuardSupported();
+  const stravaValue = !strava.data
+    ? ''
+    : !strava.data.configured
+      ? 'Kapalı'
+      : strava.data.connected
+        ? 'Bağlı'
+        : 'Bağlı değil';
   const enabled = rules.data?.filter((r) => r.enabled).length;
   const mcpValue = !mcp.data
     ? ''
@@ -234,6 +252,12 @@ function LinksGroup() {
         label="Claude bağlantısı (MCP)"
         value={mcpValue}
         onPress={() => router.push('/claude')}
+      />
+      <LinkRow label="Strava" value={stravaValue} onPress={() => router.push('/strava')} />
+      <LinkRow
+        label="Odak engeli"
+        value={!guardSupported ? 'Yalnızca Android' : guardEnabled ? 'Açık' : 'Kapalı'}
+        onPress={guardSupported ? () => router.push('/focus/blocking') : undefined}
       />
       <LinkRow
         label="Ceza kuralları"

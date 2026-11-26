@@ -6,6 +6,8 @@ import type {
   BlockCreate,
   BlockHistory,
   BlockUpdate,
+  Budget,
+  BudgetSet,
   FocusWeek,
   Goal,
   GoalCreate,
@@ -19,6 +21,10 @@ import type {
   JournalPut,
   NotificationDto,
   McpStatus,
+  MoneyMonthSummary,
+  MoneyType,
+  MoneyYearSummary,
+  MoneyCategory,
   NotificationList,
   PendingChangeDto,
   PendingChangeList,
@@ -33,7 +39,15 @@ import type {
   ProgressLog,
   StatsOverview,
   StatsRange,
+  StravaConnectResponse,
+  StravaPatch,
+  StravaStatus,
+  StravaSyncResult,
   TodayResponse,
+  Transaction,
+  TransactionCreate,
+  TransactionList,
+  TransactionUpdate,
   WeekResponse,
 } from '@takip/shared';
 import { api } from './client';
@@ -69,6 +83,13 @@ export const keys = {
   audit: ['mcp', 'audit'] as const,
   pendingChanges: ['mcp', 'pending'] as const,
   pendingChange: (id: string) => ['mcp', 'pending', id] as const,
+  strava: ['strava'] as const,
+  money: ['money'] as const,
+  moneySummary: (month: string) => ['money', 'summary', month] as const,
+  moneyYear: (year: number) => ['money', 'year', year] as const,
+  moneyTransactions: (q: TransactionQuery) =>
+    ['money', 'transactions', q.month ?? '', q.type ?? '', q.category ?? '', q.limit ?? 0] as const,
+  moneyBudgets: ['money', 'budgets'] as const,
 };
 
 export const useToday = () =>
@@ -493,5 +514,130 @@ export function useDecidePendingChange(id: string) {
       api<PendingChangeDto>(`/pending-changes/${id}/${decision}`, { method: 'POST' }),
     onSuccess: (dto) => qc.setQueryData(keys.pendingChange(id), dto),
     onSettled: () => invalidateClaudeChanges(qc),
+  });
+}
+
+/* ---------- Strava (Faz 8) ---------- */
+
+export const useStravaStatus = () =>
+  useQuery({ queryKey: keys.strava, queryFn: () => api<StravaStatus>('/integrations/strava') });
+
+/** Strava authorize adresi; tarayıcıda açılır, dönüş `takip://strava?status=...` */
+export function useStravaConnect() {
+  return useMutation({
+    mutationFn: () =>
+      api<StravaConnectResponse>('/integrations/strava/connect', { method: 'POST' }),
+  });
+}
+
+export function useUpdateStrava() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: StravaPatch) =>
+      api<StravaStatus>('/integrations/strava', { method: 'PATCH', body }),
+    onSuccess: (s) => qc.setQueryData(keys.strava, s),
+  });
+}
+
+export function useStravaSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<StravaSyncResult>('/integrations/strava/sync', { method: 'POST' }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.strava });
+      invalidateProgress(qc);
+    },
+  });
+}
+
+export function useStravaDisconnect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<void>('/integrations/strava', { method: 'DELETE' }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.strava });
+      invalidateProgress(qc);
+    },
+  });
+}
+
+/* ---------- Para ---------- */
+
+export interface TransactionQuery {
+  month?: string;
+  type?: MoneyType;
+  category?: MoneyCategory;
+  limit?: number;
+}
+
+const qs = (params: Record<string, string | number | undefined>) => {
+  const parts = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`);
+  return parts.length ? `?${parts.join('&')}` : '';
+};
+
+/** `month` yoksa sunucu içinde bulunulan ayı döner; anahtar yine de aya bağlı tutulur. */
+export const useMoneySummary = (month: string) =>
+  useQuery({
+    queryKey: keys.moneySummary(month),
+    queryFn: () => api<MoneyMonthSummary>(`/money/summary${qs({ month })}`),
+  });
+
+export const useMoneyYear = (year: number) =>
+  useQuery({
+    queryKey: keys.moneyYear(year),
+    queryFn: () => api<MoneyYearSummary>(`/money/year${qs({ year })}`),
+  });
+
+export const useTransactions = (q: TransactionQuery, enabled = true) =>
+  useQuery({
+    queryKey: keys.moneyTransactions(q),
+    queryFn: () => api<TransactionList>(`/money/transactions${qs({ ...q })}`),
+    enabled,
+  });
+
+export const useBudgets = () =>
+  useQuery({ queryKey: keys.moneyBudgets, queryFn: () => api<Budget[]>('/money/budgets') });
+
+/** Her para değişikliği bütün para sorgularını (özet, yıl, liste, bütçe) yeniler. */
+function invalidateMoney(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: keys.money });
+}
+
+export function useCreateTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TransactionCreate) =>
+      api<Transaction>('/money/transactions', { method: 'POST', body }),
+    onSuccess: () => invalidateMoney(qc),
+  });
+}
+
+export function useUpdateTransaction(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TransactionUpdate) =>
+      api<Transaction>(`/money/transactions/${id}`, { method: 'PATCH', body }),
+    onSuccess: () => invalidateMoney(qc),
+  });
+}
+
+export function useDeleteTransaction(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<void>(`/money/transactions/${id}`, { method: 'DELETE' }),
+    onSuccess: () => invalidateMoney(qc),
+  });
+}
+
+export function useSetBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BudgetSet) => api<Budget[]>('/money/budgets', { method: 'PUT', body }),
+    onSuccess: (list) => {
+      qc.setQueryData(keys.moneyBudgets, list);
+      invalidateMoney(qc);
+    },
   });
 }

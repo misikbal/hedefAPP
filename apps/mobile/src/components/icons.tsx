@@ -52,6 +52,12 @@ export const JournalIcon = ({ size = 22, color, strokeWidth = 1.8 }: IconProps) 
     <Path d="M9 9h6M9 13h6M9 17h3" />
   </Svg>
 );
+export const MoneyIcon = ({ size = 22, color, strokeWidth = 1.8 }: IconProps) => (
+  <Svg {...base(size, color, strokeWidth)}>
+    <Path d="M4 7h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1z" />
+    <Path d="M4 7l11-3v3M16 13h4v3h-4a1.5 1.5 0 0 1 0-3z" />
+  </Svg>
+);
 export const BellIcon = ({ size = 18, color, strokeWidth = 2 }: IconProps) => (
   <Svg {...base(size, color, strokeWidth)}>
     <Path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4" />

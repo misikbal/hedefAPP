@@ -1,11 +1,16 @@
 import type { Types } from 'mongoose';
-import { localDateOf, progressCreateSchema, type ProgressCreate } from '@takip/shared';
+import {
+  localDateOf,
+  progressCreateSchema,
+  type ProgressCreate,
+  type ProgressSource,
+} from '@takip/shared';
 import { Goal, ProgressLog, type ProgressLogDoc } from '../db/models/index.js';
 import { AppError } from '../lib/errors.js';
 import { clock } from './clock.js';
 import type { UserContext } from './users.js';
 
-type Source = 'app' | 'mcp' | 'block' | 'focus';
+type Source = Exclude<ProgressSource, 'strava'>;
 
 export async function logProgress(
   user: UserContext,

@@ -64,6 +64,11 @@ LOG_LEVEL=info
 TRUST_PROXY=true
 RATE_LIMIT_MAX=300
 EXPO_ACCESS_TOKEN=<isteğe bağlı, docs/BILDIRIM_KURULUMU.md §5>
+# İsteğe bağlı: Strava (docs/STRAVA_KURULUMU.md)
+STRAVA_CLIENT_ID=<strava client id>
+STRAVA_CLIENT_SECRET=<strava client secret>
+STRAVA_WEBHOOK_VERIFY_TOKEN=<openssl rand -hex 24>
+PUBLIC_API_URL=https://hedef.kodmis.com
 ADMIN_EMAIL=<e-posta>
 ADMIN_PASSWORD=<ilk girişten sonra SİL ve yeniden deploy et>
 ```

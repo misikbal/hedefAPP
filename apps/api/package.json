@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm --filter @takip/shared build && vitest run",
-    "seed:demo": "pnpm --filter @takip/shared build && tsx --env-file-if-exists=../../.env src/scripts/seedDemo.ts"
+    "seed:demo": "pnpm --filter @takip/shared build && tsx --env-file-if-exists=../../.env src/scripts/seedDemo.ts",
+    "strava:subscribe": "tsx --env-file-if-exists=../../.env src/scripts/stravaSubscribe.ts"
   },
   "dependencies": {
     "@agendajs/mongo-backend": "4.0.5",

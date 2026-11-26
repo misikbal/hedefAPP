@@ -16,18 +16,31 @@ import { statsRoutes } from './modules/stats/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { scheduleRoutes } from './modules/schedule/routes.js';
 import { notificationRoutes } from './modules/notifications/routes.js';
+import { moneyRoutes } from './modules/money/routes.js';
 import { reportRoutes } from './modules/reports/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 import { requireAuth } from './plugins/auth.js';
 import { mcpRoutes } from './mcp/routes.js';
 import { claudeRoutes } from './modules/claude/routes.js';
+import { stravaPublicRoutes, stravaRoutes } from './modules/strava/routes.js';
 
 export type AppConfig = Pick<
   Env,
   'LOG_LEVEL' | 'NODE_ENV' | 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET'
 > &
   Partial<
-    Pick<Env, 'CORS_ORIGINS' | 'TRUST_PROXY' | 'RATE_LIMIT_MAX' | 'MCP_SECRET' | 'ADMIN_EMAIL'>
+    Pick<
+      Env,
+      | 'CORS_ORIGINS'
+      | 'TRUST_PROXY'
+      | 'RATE_LIMIT_MAX'
+      | 'MCP_SECRET'
+      | 'ADMIN_EMAIL'
+      | 'STRAVA_CLIENT_ID'
+      | 'STRAVA_CLIENT_SECRET'
+      | 'STRAVA_WEBHOOK_VERIFY_TOKEN'
+      | 'PUBLIC_API_URL'
+    >
   > & {
     /** Testlerde varsayılan kapalı (çok sayıda giriş isteği atılır); üretimde her zaman açık. */
     rateLimit?: boolean;
@@ -57,6 +70,9 @@ export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
                 '*.refreshToken',
                 '*.accessToken',
                 '*.expoPushToken',
+                '*.client_secret',
+                '*.access_token',
+                '*.refresh_token',
               ],
               censor: '***',
             },
@@ -105,6 +121,14 @@ export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
     });
   }
   const secrets = { accessSecret: env.JWT_ACCESS_SECRET, refreshSecret: env.JWT_REFRESH_SECRET };
+  // OAuth state, access secret ile ama ayrı bir `typ` claim'iyle imzalanır.
+  const stravaConfig = {
+    STRAVA_CLIENT_ID: env.STRAVA_CLIENT_ID,
+    STRAVA_CLIENT_SECRET: env.STRAVA_CLIENT_SECRET,
+    STRAVA_WEBHOOK_VERIFY_TOKEN: env.STRAVA_WEBHOOK_VERIFY_TOKEN,
+    PUBLIC_API_URL: env.PUBLIC_API_URL,
+    stateSecret: env.JWT_ACCESS_SECRET,
+  };
 
   // Coolify health check için kökte; mobil istemci için /api/v1 altında da.
   await app.register(healthRoutes);
@@ -112,6 +136,8 @@ export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
     async (v1) => {
       await v1.register(healthRoutes);
       await v1.register(authRoutes(secrets));
+      // Strava: OAuth dönüşü ve webhook oturumsuz (state / verify token ile korunur).
+      await v1.register(stravaPublicRoutes(stravaConfig));
       // Claude (MCP): oturum yerine yoldaki gizli anahtar (Aşama 1).
       if (env.MCP_SECRET) {
         await v1.register(mcpRoutes({ secret: env.MCP_SECRET, adminEmail: env.ADMIN_EMAIL }));
@@ -128,9 +154,11 @@ export async function buildApp(env: AppConfig): Promise<FastifyInstance> {
         await secured.register(journalRoutes);
         await secured.register(notificationRoutes);
         await secured.register(reportRoutes);
+        await secured.register(moneyRoutes);
         await secured.register(settingsRoutes);
         await secured.register(exportRoutes);
         await secured.register(claudeRoutes({ mcpSecret: env.MCP_SECRET }));
+        await secured.register(stravaRoutes(stravaConfig));
       });
     },
     { prefix: '/api/v1' },

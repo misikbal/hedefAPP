@@ -14,3 +14,6 @@ export * from './DeviceToken.js';
 export * from './WeeklyReport.js';
 export * from './AuditLog.js';
 export * from './PendingChange.js';
+export * from './StravaConnection.js';
+export * from './Transaction.js';
+export * from './Budget.js';

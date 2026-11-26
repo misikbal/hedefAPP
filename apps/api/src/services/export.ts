@@ -11,6 +11,9 @@ import {
   PendingChange,
   ProgressLog,
   Settings,
+  StravaConnection,
+  Transaction,
+  Budget,
   User,
   WeeklyReport,
 } from '../db/models/index.js';
@@ -25,7 +28,7 @@ const clean = <T extends Record<string, unknown>>(docs: T[]) =>
   docs.map(({ userId: _u, __v: _v, ...rest }) => rest);
 
 /**
- * Kullanıcının bütün verisi (JSON yedeği). Parola özeti, oturum ve cihaz token'ları dahil edilmez.
+ * Kullanıcının bütün verisi (JSON yedeği). Parola özeti, oturum, cihaz ve Strava token'ları dahil edilmez.
  * Asıl yedek sunucudaki günlük MongoDB yedeğidir; bu dosya kişisel kopya içindir.
  */
 export async function exportAll(user: UserContext) {
@@ -46,6 +49,9 @@ export async function exportAll(user: UserContext) {
     weeklyReports,
     auditLog,
     pendingChanges,
+    stravaConnection,
+    transactions,
+    budgets,
   ] = await Promise.all([
     Settings.findOne(q).lean(),
     Block.find(q).lean(),
@@ -60,6 +66,10 @@ export async function exportAll(user: UserContext) {
     WeeklyReport.find(q).sort({ isoWeek: 1 }).lean(),
     AuditLog.find(q).sort({ createdAt: 1 }).lean(),
     PendingChange.find(q).sort({ createdAt: 1 }).lean(),
+    // Strava token'ları yedeğe girmez.
+    StravaConnection.findOne(q).select('-accessToken -refreshToken').lean(),
+    Transaction.find(q).sort({ date: 1 }).lean(),
+    Budget.find(q).lean(),
   ]);
   return {
     app: 'takip',
@@ -79,5 +89,8 @@ export async function exportAll(user: UserContext) {
     weeklyReports: clean(weeklyReports),
     auditLog: clean(auditLog),
     pendingChanges: clean(pendingChanges),
+    transactions: clean(transactions),
+    budgets: clean(budgets),
+    stravaConnection: stravaConnection ? clean([stravaConnection])[0] : null,
   };
 }

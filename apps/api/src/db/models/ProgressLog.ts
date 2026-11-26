@@ -10,10 +10,16 @@ const progressLogSchema = new Schema(
     date: { type: String, required: true },
     source: { type: String, enum: PROGRESS_SOURCES, default: 'app' },
     note: { type: String, default: null },
+    /** Dış kaynaktaki kimlik (Strava etkinlik id'si); aynı etkinlik iki kez yazılmaz */
+    externalId: { type: String, default: null },
   },
   { timestamps: true },
 );
 progressLogSchema.index({ userId: 1, goalId: 1, date: 1 });
+progressLogSchema.index(
+  { userId: 1, externalId: 1 },
+  { unique: true, partialFilterExpression: { externalId: { $type: 'string' } } },
+);
 
 export type ProgressLogDoc = HydratedDocument<InferSchemaType<typeof progressLogSchema>>;
 export const ProgressLog = model('ProgressLog', progressLogSchema);

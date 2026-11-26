@@ -5,6 +5,7 @@ import {
   FocusIcon,
   GoalsIcon,
   JournalIcon,
+  MoneyIcon,
   PenaltyIcon,
   TodayIcon,
   WeekIcon,
@@ -19,6 +20,7 @@ const TABS: { name: string; title: string; Icon: ComponentType<{ color: string }
   { name: 'goals', title: 'Hedef', Icon: GoalsIcon },
   { name: 'penalties', title: 'Ceza', Icon: PenaltyIcon },
   { name: 'journal', title: 'Günlük', Icon: JournalIcon },
+  { name: 'money', title: 'Para', Icon: MoneyIcon },
 ];
 
 export default function TabsLayout() {
@@ -38,7 +40,8 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: c.accTx,
         tabBarInactiveTintColor: c.mut,
-        tabBarLabelStyle: { fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
+        tabBarLabelStyle: { fontFamily: fonts.body, fontSize: 10, marginTop: 2 },
+        tabBarItemStyle: { paddingHorizontal: 0 },
       }}
     >
       {TABS.map(({ name, title, Icon }) => (

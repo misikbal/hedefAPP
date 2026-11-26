@@ -36,6 +36,15 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   ADMIN_EMAIL: z.email().optional(),
   ADMIN_PASSWORD: z.string().optional(),
+  /** Strava entegrasyonu (isteğe bağlı; üçü de yoksa entegrasyon kapalı görünür) */
+  STRAVA_CLIENT_ID: z.string().regex(/^\d+$/, 'STRAVA_CLIENT_ID sayı olmalı').optional(),
+  STRAVA_CLIENT_SECRET: z.string().min(1).optional(),
+  STRAVA_WEBHOOK_VERIFY_TOKEN: z.string().min(16).optional(),
+  /** Dışarıdan erişilen kök adres (ör. https://hedef.kodmis.com); OAuth callback ve webhook buradan kurulur */
+  PUBLIC_API_URL: z
+    .url()
+    .optional()
+    .transform((v) => v?.replace(/\/+$/, '')),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -20,6 +20,7 @@ import { ResetIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { errorMessage } from '@/components/StateViews';
 import { Txt } from '@/components/Txt';
+import { GuardStatus } from '@/features/focus/GuardStatus';
 import { MountainClimb } from '@/features/focus/MountainClimb';
 import { WeekPeaks } from '@/features/focus/WeekPeaks';
 import {
@@ -236,7 +237,14 @@ export default function FocusScreen() {
         )}
       </View>
 
-      <MountainClimb plannedMinutes={planned} progress={progress} flag={summit} />
+      <MountainClimb
+        plannedMinutes={planned}
+        progress={progress}
+        flag={summit}
+        running={session?.status === 'running'}
+      />
+
+      <GuardStatus />
 
       <View style={styles.clockBox}>
         <Txt style={[styles.clock, { color: c.tx }]} accessibilityRole="timer">

@@ -46,6 +46,24 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-splash-screen',
       { image: './assets/splash-icon.png', imageWidth: 160, backgroundColor: '#0E1116' },
     ],
+    [
+      'react-native-android-widget',
+      {
+        widgets: [
+          {
+            name: 'TodayWidget',
+            label: 'Takip — Bugün',
+            description: 'Bugünün blokları, hedefler ve bekleyen ceza',
+            minWidth: '250dp',
+            minHeight: '110dp',
+            targetCellWidth: 4,
+            targetCellHeight: 2,
+            resizeMode: 'horizontal|vertical',
+            updatePeriodMillis: 30 * 60 * 1000,
+          },
+        ],
+      },
+    ],
   ],
   experiments: { typedRoutes: true },
   extra: { apiUrl, eas: { projectId: easProjectId } },

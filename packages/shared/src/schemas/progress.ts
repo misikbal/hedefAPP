@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { localDateSchema, objectIdSchema } from './common.js';
 
-export const PROGRESS_SOURCES = ['app', 'mcp', 'block', 'focus'] as const;
+export const PROGRESS_SOURCES = ['app', 'mcp', 'block', 'focus', 'strava'] as const;
+export type ProgressSource = (typeof PROGRESS_SOURCES)[number];
 
 export const progressCreateSchema = z.object({
   goalId: objectIdSchema,

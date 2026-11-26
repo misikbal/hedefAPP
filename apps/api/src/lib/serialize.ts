@@ -9,6 +9,7 @@ import {
   type Instance,
   type Penalty as PenaltyDto,
   type ProgressLog as ProgressLogDto,
+  type Transaction as TransactionDto,
   type NotificationDto,
   type SettingsDto,
   type McpPermissions,
@@ -21,6 +22,7 @@ import type {
   JournalEntryDoc,
   PenaltyDoc,
   ProgressLogDoc,
+  TransactionDoc,
   NotificationDoc,
   SettingsDoc,
 } from '../db/models/index.js';
@@ -93,6 +95,18 @@ export function toProgressDto(p: ProgressLogDoc): ProgressLogDto {
     date: p.date,
     source: p.source,
     note: p.note ?? null,
+  };
+}
+
+export function toTransactionDto(t: TransactionDoc): TransactionDto {
+  return {
+    id: t.id as string,
+    type: t.type,
+    amount: t.amount,
+    category: t.category,
+    date: t.date,
+    note: t.note ?? null,
+    source: t.source,
   };
 }
 

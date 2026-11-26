@@ -20,6 +20,7 @@ export type NotifyEvent =
   | { type: 'motivation'; dedupeKey: string; title: string; body: string; deepLink: string }
   | { type: 'journal_reminder'; date: string }
   | { type: 'weekly_report'; isoWeek: string; title: string; body: string }
+  | { type: 'budget_alert'; dedupeKey: string; title: string; body: string }
   | { type: 'claude_pending'; pendingId: string; title: string; body: string }
   | { type: 'claude_change'; dedupeKey: string; title: string; body: string };
 
@@ -83,6 +84,16 @@ export function toDeliverInput(e: NotifyEvent): DeliverInput {
         body: e.body,
         deepLink: `/reports/${e.isoWeek}`,
         dedupeKey: `weekly_report:${e.isoWeek}`,
+        setting: null,
+      };
+    case 'budget_alert':
+      return {
+        type: 'reminder',
+        kind: e.type,
+        title: e.title,
+        body: e.body,
+        deepLink: '/money',
+        dedupeKey: e.dedupeKey,
         setting: null,
       };
     case 'claude_pending':

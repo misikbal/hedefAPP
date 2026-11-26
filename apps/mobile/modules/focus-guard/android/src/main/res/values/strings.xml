@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="focus_guard_label">Takip odak engeli</string>
+  <string name="focus_guard_description">Odak seansı sürerken seçtiğin uygulamaları (ya da Tam odak modunda telefonun geri kalanını) açılmaktan alıkoyar ve seni Takip\'e geri getirir. Yalnızca öne gelen uygulamanın paket adını görür; ekran içeriğini okumaz, yazdıklarını kaydetmez. Hiçbir veri cihazdan çıkmaz. Seans yokken hiçbir şey yapmaz.</string>
+</resources>

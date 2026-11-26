@@ -6,6 +6,12 @@ import {
   DAY_NAMES,
   GOAL_PERIODS,
   GOAL_UNITS,
+  EXPENSE_CATEGORIES,
+  MONEY_CATEGORIES,
+  MONEY_CATEGORY_LABELS,
+  MONEY_TYPES,
+  moneyAmountSchema,
+  formatMoney,
   PENALTY_ON_FAIL,
   PENALTY_TARGET_TYPES,
   PENALTY_TRIGGERS,
@@ -35,6 +41,14 @@ import { listGoals } from '../services/goals.js';
 import { listPenalties } from '../services/penalties.js';
 import { listRules, toRuleDtos } from '../services/penaltyRules.js';
 import { createPendingChange } from '../services/pendingChanges.js';
+import {
+  createTransaction,
+  currentMonth,
+  listTransactions,
+  monthSummary,
+  setBudget,
+  yearSummary,
+} from '../services/money.js';
 import { goalSummaries, statsOverview } from '../services/stats.js';
 import { getSettings, type UserContext } from '../services/users.js';
 import { getToday, getWeek } from '../services/views.js';
@@ -523,6 +537,133 @@ export function createMcpServer(user: UserContext): McpServer {
         return write('delete_block', { blockId: block.id as string }, a.userMessage);
       },
     ),
+  );
+
+  /* ---------- para (kayıt ve özet; geri alma/onay yok, silme yalnız uygulamadan) ---------- */
+
+  server.registerTool(
+    'add_transaction',
+    {
+      title: 'Harcama / gelir ekle',
+      description:
+        'Para kaydı ekler (ör. "market 250 TL harcadım" → type=expense, amount=250, category=grocery). Tutar TL, pozitif. Tarih verilmezse bugün. Kategoriler harcama: food (yemek), grocery (market), transport (ulaşım), bills (fatura), rent (kira), fun (eğlence), health (sağlık), shopping (alışveriş), education (eğitim), other_expense; gelir: salary (maaş), extra (ek gelir), gift (hediye), other_income. Kategori verilmezse "diğer" olur.',
+      inputSchema: {
+        type: z.enum(MONEY_TYPES).describe('expense = harcama, income = gelir'),
+        amount: moneyAmountSchema.describe('TL cinsinden pozitif tutar'),
+        category: z.enum(MONEY_CATEGORIES).optional(),
+        date: localDateSchema.optional().describe('Varsayılan bugün; ileri tarih olmaz'),
+        note: z.string().max(200).optional().describe('Ne için, ör. "Migros"'),
+      },
+    },
+    run('add_transaction', async (a: Record<string, unknown>) => {
+      const tx = await createTransaction(user, strip(a) as never, 'mcp');
+      const label = MONEY_CATEGORY_LABELS[tx.category];
+      return ok(
+        `${tx.type === 'income' ? 'Gelir' : 'Harcama'} eklendi: ${formatMoney(tx.amount)} (${label}, ${tx.date}).`,
+        { id: tx.id as string, type: tx.type, amount: tx.amount, category: tx.category, date: tx.date },
+      );
+    }),
+  );
+
+  server.registerTool(
+    'list_transactions',
+    {
+      title: 'Para kayıtları',
+      description:
+        'Gelir/harcama kayıtlarını yeniden eskiye döner. month (YYYY-AA), type ve category ile süzülür; varsayılan bu ay, en çok 50 kayıt.',
+      inputSchema: {
+        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe('YYYY-AA, varsayılan bu ay'),
+        type: z.enum(MONEY_TYPES).optional(),
+        category: z.enum(MONEY_CATEGORIES).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    run('list_transactions', async (a: Record<string, unknown>) => {
+      const month = (a.month as string | undefined) ?? currentMonth(user);
+      const items = await listTransactions(user, {
+        month,
+        type: a.type as never,
+        category: a.category as never,
+        limit: (a.limit as number | undefined) ?? 50,
+      });
+      return ok(`${month}: ${items.length} kayıt.`, {
+        transactions: items.map((t) => ({
+          id: t.id as string,
+          date: t.date,
+          type: t.type,
+          amount: t.amount,
+          category: t.category,
+          note: t.note ?? null,
+        })),
+      });
+    }),
+  );
+
+  server.registerTool(
+    'get_money_summary',
+    {
+      title: 'Para özeti',
+      description:
+        'Bir ayın gelir, harcama ve net (gelir − gider) toplamı, kategori dağılımı, bütçe limitleri ve önceki aya göre fark. Verilmezse bu ay. year verilirse (YYYY) 12 aylık yıllık özet döner.',
+      inputSchema: {
+        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe('YYYY-AA'),
+        year: z.number().int().min(2000).max(2100).optional().describe('Verilirse yıllık özet'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    run('get_money_summary', async (a: { month?: string | undefined; year?: number | undefined }) => {
+      if (a.year) {
+        const y = await yearSummary(user, a.year);
+        return ok(`${y.year}: gelir ${formatMoney(y.income)}, harcama ${formatMoney(y.expense)}, net ${formatMoney(y.net)}.`, {
+          months: y.months,
+          expenseByCategory: y.expenseByCategory.map((c) => ({ category: c.category, total: c.total })),
+          incomeByCategory: y.incomeByCategory.map((c) => ({ category: c.category, total: c.total })),
+        });
+      }
+      const m = await monthSummary(user, a.month ?? currentMonth(user));
+      return ok(
+        `${m.month}: gelir ${formatMoney(m.income)}, harcama ${formatMoney(m.expense)}, net ${formatMoney(m.net)}.`,
+        {
+          month: m.month,
+          income: m.income,
+          expense: m.expense,
+          net: m.net,
+          previousExpense: m.previousExpense,
+          budget: m.budget,
+          expenseByCategory: m.expenseByCategory.map((c) => ({
+            category: c.category,
+            total: c.total,
+            limit: c.limit,
+            status: c.status,
+          })),
+          incomeByCategory: m.incomeByCategory.map((c) => ({ category: c.category, total: c.total })),
+        },
+      );
+    }),
+  );
+
+  server.registerTool(
+    'set_budget',
+    {
+      title: 'Aylık bütçe limiti',
+      description:
+        'Aylık harcama limiti koyar ya da kaldırır. category verilmezse toplam harcama limiti; verilirse yalnızca o harcama kategorisi. monthlyLimit null ise limit kaldırılır. Limit %80 ve aşımda kullanıcıya bildirim gider.',
+      inputSchema: {
+        category: z.enum(EXPENSE_CATEGORIES).optional().describe('Boşsa toplam harcama'),
+        monthlyLimit: moneyAmountSchema.nullable().describe('TL; null = limiti kaldır'),
+      },
+    },
+    run('set_budget', async (a: { category?: (typeof EXPENSE_CATEGORIES)[number] | undefined; monthlyLimit: number | null }) => {
+      const budgets = await setBudget(user, { category: a.category ?? null, monthlyLimit: a.monthlyLimit });
+      const scope = a.category ? MONEY_CATEGORY_LABELS[a.category] : 'Toplam harcama';
+      return ok(
+        a.monthlyLimit === null
+          ? `${scope} limiti kaldırıldı.`
+          : `${scope} aylık limiti ${formatMoney(a.monthlyLimit)} oldu.`,
+        { budgets },
+      );
+    }),
   );
 
   /* ---------- hedef ve ilerleme ---------- */

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "3d98e565-faf3-4e2a-91fc-1179adc7aa0b"
+      }
+    },
+    "android": {
+      "package": "com.kodmis.takip"
+    }
+  }
+}

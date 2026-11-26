@@ -28,6 +28,8 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - Faz 4 — Odak ve günlük: kodlandı (2026-11-25), kullanıcı onayı bekleniyor. Kararlar aşağıda.
 - Faz 5 — Bildirimler: sırada (onaydan sonra)
 - Faz 6 — MCP (Claude): kodlandı (2026-11-26), kullanıcı onayı bekleniyor. Kararlar aşağıda.
+- Para takibi (2026-11-26): kodlandı, kullanıcı onayı bekleniyor. Kararlar aşağıda.
+- Faz 8 — Widget ve Strava: kodlandı (2026-11-26), kullanıcı onayı bekleniyor. MCP OAuth (Aşama 2) yapılmadı.
 
 ## Notlar
 
@@ -104,3 +106,29 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - `update_block` / `delete_block` her zaman şimdiden itibaren bütün gelecek haftalara uygulanır (`this_week` kapsamı yok).
 - Bildirim türü `claude`, ayar anahtarına bağlı değil: onay isteği (`/claude/pending/<id>`) ve doğrudan değişiklik (saatte en çok bir, `/claude`).
 - Mobil: `app/claude/index.tsx` (bağlantı, geçmiş, izinler), `app/claude/pending/[id].tsx` (onay), Bugün'de son değişiklik kartı ve onay şeridi. `expo-clipboard` eklendi. Anahtar yenileme yalnız ortam değişkeni + deploy ile (`docs/DAGITIM.md` §4.1).
+
+## Faz 8 kararları (2026-11-26, onay bekliyor)
+
+- Widget: `react-native-android-widget` 0.26.0 (config plugin, New Architecture). Kod `apps/mobile/src/widget/`; giriş `apps/mobile/index.ts` (`expo-router/entry` + görev kaydı, package.json `main`). Yalnız development/EAS build'de; Expo Go ve web'de no-op. Veri `GET /today` (mevcut `api()` + refresh), AsyncStorage önbelleği. Güncelleme: 30 dk + `WidgetLifecycle` (açılış, ön plan, her başarılı mutasyon; çıkışta "Giriş yap"). Görünüm modeli testleri: `npx vitest run apps/mobile/src/widget` (`pnpm test`'e dahil değil).
+- Strava: env `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_WEBHOOK_VERIFY_TOKEN`, `PUBLIC_API_URL` (yoksa kapalı, 503 `STRAVA_NOT_CONFIGURED`). OAuth state = `JWT_ACCESS_SECRET` ile imzalı 10 dk JWT; callback `takip://strava?status=...`'e 302. ProgressLog `source:'strava'` + `externalId` (kısmi unique) → tekrar yazılmaz. Webhook imzasız olduğu için etkinlik her zaman Strava'dan yeniden çekilir. Elle eşitleme: ilk 30 gün, sonra `lastSyncAt − 2 gün`. Kurulum: `docs/STRAVA_KURULUMU.md`, abonelik `pnpm --filter @takip/api strava:subscribe`.
+- Strava kodu duruyor ama kullanılmıyor (2026-11-26, kullanıcı kararı): env tanımlanmadı, km elle giriliyor. Ayarlar'daki satır "Kapalı" görünür.
+- Uygulamada silinen Strava kaydı sonraki eşitlemede geri gelir; Strava 429'da yeniden deneme yok.
+
+## Odak engeli kararları (2026-11-26, onay bekliyor)
+
+- Yalnızca Android, yerel Expo modülü `apps/mobile/modules/focus-guard` (Kotlin, npm bağımlılığı yok; autolinking varsayılan `./modules` dizinini bulur). Yeni native kod: development build / APK yeniden alınmalı. Modül yoksa (`requireOptionalNativeModule`) her şey no-op, ekranlar "yalnızca Android" der.
+- `FocusGuardService` (AccessibilityService, yalnız `typeWindowStateChanged`, `canRetrieveWindowContent=false`): öne gelen paket engelliyse HOME + 250 ms sonra `takip://focus/blocked?pkg=` açılır; aynı paket 1 sn throttle. Durum SharedPreferences'ta (`takip.focus_guard`): JS ölü olsa da çalışır, `until` geçince pasif. `attempts` seans kimliği değişince sıfırlanır.
+- Modlar: `apps` (seçili paketler) ve `all` (Tam odak: izin listesi dışındaki her şey; her zaman izinli: kendi paketimiz, launcher'lar, systemui, `android`, etkin klavyeler, varsayılan/sistem arama uygulaması, telecom/phone/emergency, permissioncontroller, intentresolver + kullanıcının izinli listesi). Katı mod (`blockSettings`) Ayarlar ve paket yükleyiciyi (kaldırma) engeller; kapalıyken bunlar her iki modda izinli. Ayarlar paketleri uygulama listesinde görünmez.
+- Ayarlar cihazda: `src/store/guardStore.ts` (varsayılan kapalı, mod `apps`, sosyal medya listesi ilk uygulama listesi okunuşunda kurulu olanlarla bir kez daraltılır, WhatsApp yok, molada da engelle açık, katı mod kapalı).
+- Senkron: `actions.ts → rescheduleEnd` içinde `syncGuard(session)` (başlat/duraklat/devam/bitir/sıfırla/eşitle hepsi buradan geçer), çıkışta `stopGuard()`. running → bitiş + 1 dk; paused → molada da engelle açıksa şimdi + 6 saat, değilse kapalı; mola (breakEndsAt) engellemez. Ayar ekranındaki her değişiklik açık seansa hemen uygulanır. Hizmet kapalıyken seans başlatılır, Odak ekranındaki `GuardStatus` uyarı rengiyle gösterir.
+- Ekranlar: `app/focus/blocking.tsx` (izin adımları, anahtarlar, mod, aranabilir uygulama listesi ikonlu), `app/focus/blocked.tsx` (kalan süre, engel sayısı, geri tuşu → Odak), Ayarlar'da "Odak engeli" satırı.
+- Paket görünürlüğü `<queries>` (LAUNCHER, HOME, InputMethod) ile; `QUERY_ALL_PACKAGES` yok.
+- Sınır: Sıfırla (abandon) engeli kaldırır; servis Android tarafından öldürülürse ya da kullanıcı katı mod kapalıyken izni kapatırsa engel düşer. Bölünmüş ekran/PiP ve bildirimden yanıt verme engellenmez.
+
+## Para takibi kararları (2026-11-26, onay bekliyor)
+
+- Kapsam: gelir/harcama kaydı, aylık ve yıllık özet, kategori dağılımı, aylık bütçe limiti (toplam + harcama kategorisi başına). Birikim ayrı kumbara değil: net = gelir − gider. Tek para birimi (TL), tutar pozitif ve en çok 2 ondalık; yön `type` ile.
+- Sözleşme `@takip/shared → schemas/money.ts` (sabit kategori listesi: harcama 10, gelir 4; Türkçe etiketler `MONEY_CATEGORY_LABELS`). Modeller `Transaction`, `Budget` (unique `userId+category`, `category:null` = toplam limit). Servis `services/money.ts`, rotalar `/money/*`. Gelecek tarihe kayıt girilemez; "ay" yerel saat dilimine göre.
+- Bütçe bildirimi: harcama eklenince (yalnız içinde bulunulan ay) toplam/kategori limitinin %80'ine ve aşımına ulaşılırsa `budget_alert` (reminder türü, ayar anahtarına bağlı değil); `dedupeKey = budget:<ay>:<kategori|total>:<warn|over>` → ayda her eşik bir kez.
+- MCP: `add_transaction`, `list_transactions`, `get_money_summary`, `set_budget` (toplam 20 araç). Doğrudan uygulanır; AuditLog/geri al/onay akışına girmez, silme MCP'de yok (yalnız uygulamadan). `source:'mcp'` ile işaretlenir.
+- `GET /export` artık `transactions` ve `budgets` içerir. Ceza kuralı bağlantısı ve haftalık rapora ekleme yapılmadı.

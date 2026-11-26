@@ -24,6 +24,10 @@ export const MCP_TOOLS = [
   'write_journal',
   'get_journal',
   'undo_last_change',
+  'add_transaction',
+  'list_transactions',
+  'get_money_summary',
+  'set_budget',
 ] as const;
 export type McpToolName = (typeof MCP_TOOLS)[number];
 

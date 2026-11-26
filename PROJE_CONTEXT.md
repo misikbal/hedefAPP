@@ -362,5 +362,5 @@ ADMIN_PASSWORD=...   # yalnızca ilk çalıştırmada kullanıcı oluşturmak i�
 - **Android'de tam zamanında bildirim:** Pil optimizasyonu planlı bildirimleri geciktirebilir. Gerekirse kullanıcıyı ayarlar ekranından pil optimizasyonu istisnasına yönlendir.
 - **MongoDB'yi asla internete açma.** Coolify'da "Make it publicly available" kapalı kalmalı.
 - MCP araçlarının yanıtları kısa ve yapılandırılmış olsun. Claude'a gereksiz büyük JSON dönme.
-- Odak sayacını telefonda gerçekten "kilitlemek", yani diğer uygulamaları engellemek, bu projenin kapsamı dışında. Yalnızca arka plana geçiş tespit edilir.
+- Odak engeli (2026-11-26, kullanıcı istedi; eskiden kapsam dışıydı): yalnızca Android. Seans sürerken seçili uygulamalar (varsayılan: kurulu sosyal medya) ya da "Tam odak" modunda telefonun geri kalanı, Android erişilebilirlik hizmetiyle (yerel modül `apps/mobile/modules/focus-guard`) açılmaz; Takip öne gelir. Hizmeti kullanıcı elle açar; Android 13+ sideload APK'da önce "Kısıtlı ayarlara izin ver" gerekir. Arka plana geçiş tespiti de sürer. iOS/web'de yok.
 - Agenda işleri birden fazla API kopyası çalışırsa çakışabilir. Tek kopya çalıştır veya Agenda'nın kilit mekanizmasını doğrula.
