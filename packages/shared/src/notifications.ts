@@ -4,14 +4,34 @@ import { addDays, localDateOf, localTimeOf, timeToMinutes, zonedDateTimeToUtc } 
 export const NOTIFICATION_TYPES = ['reminder', 'motivation', 'penalty', 'claude'] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
-/** Android bildirim kanalları; push mesajı ve yerel bildirim aynı kimlikleri kullanır. */
+/**
+ * Android bildirim kanalları; push mesajı ve yerel bildirim aynı kimlikleri kullanır.
+ * Android'de kanalın sesi oluşturulduktan sonra değiştirilemez; ses değişince kimlik sürümü
+ * artırılır (`_v2`) ve eski kanallar (`LEGACY_NOTIFICATION_CHANNELS`) cihazda silinir.
+ */
 export const NOTIFICATION_CHANNELS = {
-  reminders: 'reminders',
-  penalties: 'penalties',
-  motivation: 'motivation',
-  claude: 'claude',
+  reminders: 'reminders_v2',
+  penalties: 'penalties_v2',
+  motivation: 'motivation_v2',
+  claude: 'claude_v2',
+  /** Odak seansı ve mola bitişi (yalnız yerel bildirim) */
+  focus: 'focus_v2',
 } as const;
 export type NotificationChannel = keyof typeof NOTIFICATION_CHANNELS;
+
+export const LEGACY_NOTIFICATION_CHANNELS = ['reminders', 'penalties', 'motivation', 'claude'] as const;
+
+/**
+ * Uygulamaya özel bildirim sesleri (`apps/mobile/assets/sounds`, `scripts/make-sounds.py`).
+ * null = sessiz kanal. Android'de kanal sesi, iOS'ta push `sound` alanı kullanılır.
+ */
+export const NOTIFICATION_SOUNDS = {
+  reminders: 'takip_hatirlatma.wav',
+  penalties: 'takip_ceza.wav',
+  motivation: null,
+  claude: 'takip_bildirim.wav',
+  focus: 'takip_zirve.wav',
+} as const satisfies Record<NotificationChannel, string | null>;
 
 export const CHANNEL_FOR_TYPE: Record<NotificationType, NotificationChannel> = {
   reminder: 'reminders',

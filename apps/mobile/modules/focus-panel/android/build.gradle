@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.takip.focuspanel'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.focuspanel"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // NotificationCompat + DecoratedCustomViewStyle; expo-notifications ile aynı sürüm
+  implementation 'androidx.core:core:1.17.0'
+}

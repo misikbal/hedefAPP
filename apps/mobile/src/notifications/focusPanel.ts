@@ -1,35 +1,37 @@
+import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import {
-  APP_TIMEZONE,
-  UNIT_LABELS,
-  focusRemainingMs,
-  formatNumber,
-  localTimeOf,
-  type FocusSession,
-  type GoalSummary,
-  type Penalty,
-  type TodayResponse,
-} from '@takip/shared';
+import type { FocusSession, GoalSummary, Penalty, TodayResponse } from '@takip/shared';
 import { api } from '@/api/client';
 import { keys } from '@/api/hooks';
 import { queryClient } from '@/api/queryClient';
 import { focusNow } from '@/store/focusStore';
+import {
+  PANEL_MAX_PENALTIES,
+  buildFocusPanelModel,
+  panelText,
+  type FocusPanelModel,
+} from './focusPanelModel';
 import { SUPPORTED, ensurePermission } from './local';
 
 /**
- * Odak seansı açıkken bildirim çekmecesinde duran kalıcı panel (Android'de kaydırılarak
- * kapatılamaz). Seansın bitiş saati, bugünün hedefleri ve açık cezalar görünür.
- * Aynı kimlikle yeniden gösterildiğinde eskisinin yerine geçer; titreşim/ses yok.
+ * Odak seansı açıkken bildirim çekmecesinde duran kalıcı panel.
  *
- * Not: expo-notifications canlı geri sayım (chronometer) desteklemez; bu yüzden panel
- * kalan süre yerine bitiş saatini gösterir ve her durum değişiminde yenilenir.
+ * Android'de yerel modül `modules/focus-panel` varsa (development build / APK): canlı geri sayım,
+ * genişleyince seans ilerlemesi, hedefler (çubuklu), açık cezalar ve Duraklat/Devam düğmesi.
+ * Modül yoksa (Expo Go, iOS) expo-notifications ile düz metin; orada canlı sayaç yok, bitiş saati var.
+ * Düğme `takip://focus?panel=toggle&s=<id>:<durum>` açar; Odak sekmesi işler.
  */
 export const FOCUS_PANEL_ID = 'focus-panel';
 export const FOCUS_PANEL_KIND = 'focus_panel';
 const CHANNEL_ID = 'focus_panel';
-const MAX_GOALS = 4;
-const MAX_PENALTIES = 3;
+
+interface FocusPanelNative {
+  show(model: FocusPanelModel): boolean;
+  hide(): void;
+}
+const native =
+  Platform.OS === 'android' ? requireOptionalNativeModule<FocusPanelNative>('FocusPanel') : null;
 
 let channelReady: Promise<void> | null = null;
 function ensurePanelChannel(): Promise<void> {
@@ -38,7 +40,7 @@ function ensurePanelChannel(): Promise<void> {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
       name: 'Odak paneli',
       importance: Notifications.AndroidImportance.LOW,
-      description: 'Odak sırasında hedefler ve cezalar',
+      description: 'Odak sırasında kalan süre, hedefler ve cezalar',
       sound: null,
       vibrationPattern: null,
       enableVibrate: false,
@@ -46,44 +48,6 @@ function ensurePanelChannel(): Promise<void> {
     }).catch(() => undefined);
   })();
   return channelReady;
-}
-
-const hhmm = (d: Date) => localTimeOf(d, APP_TIMEZONE);
-
-function goalLine(g: GoalSummary): string {
-  const mark = g.status === 'done' ? '✓' : '•';
-  return `${mark} ${g.name}: ${formatNumber(g.current)}/${formatNumber(g.target)} ${UNIT_LABELS[g.unit]}`;
-}
-
-function penaltyLine(p: Penalty): string {
-  return `! ${p.text} · ${hhmm(new Date(p.dueAt))}'e kadar`;
-}
-
-/** Panel metni (saf; test edilebilir). */
-export function buildFocusPanel(
-  s: FocusSession,
-  goals: GoalSummary[],
-  penalties: Penalty[],
-  now: number,
-): { title: string; body: string } {
-  const label = s.label.trim() || 'Odak';
-  const head =
-    s.status === 'paused'
-      ? `Duraklatıldı · ${Math.ceil(focusRemainingMs(s, now) / 60_000)} dk kaldı`
-      : `Bitiş ${hhmm(new Date(Date.now() + focusRemainingMs(s, now)))} · ${s.plannedMinutes} dk`;
-
-  const open = goals.filter((g) => g.status !== 'done');
-  const shown = [...open, ...goals.filter((g) => g.status === 'done')].slice(0, MAX_GOALS);
-  const lines = [head];
-  if (shown.length) {
-    lines.push('', `Hedefler (${goals.length - open.length}/${goals.length} tamam)`);
-    lines.push(...shown.map(goalLine));
-  }
-  if (penalties.length) {
-    lines.push('', `Cezalar (${penalties.length})`);
-    lines.push(...penalties.slice(0, MAX_PENALTIES).map(penaltyLine));
-  }
-  return { title: `${s.status === 'paused' ? 'Odak duraklatıldı' : 'Odaktasın'} — ${label}`, body: lines.join('\n') };
 }
 
 async function loadContext(): Promise<{ goals: GoalSummary[]; penalties: Penalty[] }> {
@@ -97,8 +61,8 @@ async function loadContext(): Promise<{ goals: GoalSummary[]; penalties: Penalty
       .catch(() => queryClient.getQueryData<TodayResponse>(keys.today) ?? null),
     queryClient
       .fetchQuery({
-        queryKey: keys.penaltyList('open', MAX_PENALTIES),
-        queryFn: () => api<Penalty[]>(`/penalties?status=open&limit=${MAX_PENALTIES}`),
+        queryKey: keys.penaltyList('open', PANEL_MAX_PENALTIES + 1),
+        queryFn: () => api<Penalty[]>(`/penalties?status=open&limit=${PANEL_MAX_PENALTIES + 1}`),
         staleTime: 30_000,
       })
       .catch(() => [] as Penalty[]),
@@ -121,7 +85,19 @@ export async function updateFocusPanel(s: FocusSession | null): Promise<void> {
   const ctx = await loadContext();
   // Bu arada yeni bir durum geldiyse eski içeriği yazma.
   if (mine !== seq) return;
-  const { title, body } = buildFocusPanel(s, ctx.goals, ctx.penalties, focusNow());
+  const model = buildFocusPanelModel(s, ctx.goals, ctx.penalties, focusNow(), Date.now());
+  if (native) {
+    try {
+      if (native.show(model)) {
+        // önceki sürümün düz metin paneli kaldıysa kaldır
+        await Notifications.dismissNotificationAsync(FOCUS_PANEL_ID).catch(() => undefined);
+        return;
+      }
+    } catch {
+      // yerel panel çizilemedi; düz metne düş
+    }
+  }
+  const { title, body } = panelText(model);
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: FOCUS_PANEL_ID,
@@ -144,5 +120,10 @@ export async function updateFocusPanel(s: FocusSession | null): Promise<void> {
 export async function hideFocusPanel(): Promise<void> {
   if (!SUPPORTED) return;
   seq++;
+  try {
+    native?.hide();
+  } catch {
+    // modül yok ya da bildirim zaten kalkmış
+  }
   await Notifications.dismissNotificationAsync(FOCUS_PANEL_ID).catch(() => undefined);
 }

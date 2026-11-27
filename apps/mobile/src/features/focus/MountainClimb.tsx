@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
@@ -24,6 +24,18 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { focusLevel, formatNumber } from '@takip/shared';
+import {
+  PALETTES,
+  START,
+  inPoly,
+  mountainGeometry,
+  rng,
+  sceneLabel,
+  sceneVariant,
+  trailAt,
+  type MountainGeometry,
+  type Palette,
+} from './mountainScene';
 import { Txt } from '@/components/Txt';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/typography';
@@ -58,92 +70,8 @@ const F = [150, 200] as const;
 const DEPTH = 30;
 
 const LEVEL_MINUTES: readonly number[] = [25, 50, 90];
-export const SUMMIT_X = 208;
-/** Seviye başına zirve yüksekliği (y, küçük = yüksek) */
-export const SUMMIT_Y = [78, 50, 24] as const;
-export const START = [92, 164] as const;
 
 const pt = (p: readonly [number, number]) => `${p[0]},${p[1]}`;
-
-export interface Trail {
-  /** düz dizi: x0,y0,x1,y1,... */
-  pts: number[];
-  /** her noktaya kadar birikmiş uzunluk */
-  cum: number[];
-  len: number;
-  d: string;
-}
-
-function buildTrail(top: number): Trail {
-  const raw: [number, number][] = [
-    [START[0], START[1]],
-    [110, 167],
-    [126, 161],
-    [141, 164],
-    [156, 158],
-    [168, 150],
-  ];
-  const n = 5;
-  const baseY = 150;
-  for (let k = 1; k <= n; k++) {
-    const f = k / (n + 1);
-    const y = baseY + (top + 4 - baseY) * f;
-    const x = SUMMIT_X + (k % 2 ? -1 : 1) * 28 * (1 - f);
-    raw.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
-  }
-  raw.push([SUMMIT_X, top + 1]);
-  const pts: number[] = [];
-  const cum: number[] = [];
-  let acc = 0;
-  raw.forEach(([x, y], i) => {
-    if (i > 0) {
-      const [px, py] = raw[i - 1]!;
-      acc += Math.hypot(x - px, y - py);
-    }
-    pts.push(x, y);
-    cum.push(acc);
-  });
-  const d = raw.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
-  return { pts, cum, len: acc, d };
-}
-
-export const TRAILS = SUMMIT_Y.map(buildTrail);
-
-/** Patika üzerinde p (0–1) oranındaki nokta; UI thread'de çalışır. */
-export function trailAt(pts: number[], cum: number[], len: number, p: number): { x: number; y: number } {
-  'worklet';
-  const target = len * Math.min(1, Math.max(0, p));
-  const n = cum.length;
-  for (let i = 1; i < n; i++) {
-    if (cum[i]! >= target) {
-      const seg = cum[i]! - cum[i - 1]!;
-      const f = seg > 0 ? (target - cum[i - 1]!) / seg : 0;
-      const ax = pts[(i - 1) * 2]!;
-      const ay = pts[(i - 1) * 2 + 1]!;
-      return { x: ax + (pts[i * 2]! - ax) * f, y: ay + (pts[i * 2 + 1]! - ay) * f };
-    }
-  }
-  return { x: pts[(n - 1) * 2]!, y: pts[(n - 1) * 2 + 1]! };
-}
-
-/** Basit belirli rastgele (her açılışta aynı ağaç dizilişi) */
-function rng(seed: number) {
-  let s = seed;
-  return () => {
-    s = (s * 1664525 + 1013904223) % 4294967296;
-    return s / 4294967296;
-  };
-}
-
-function inPoly(x: number, y: number, poly: readonly (readonly [number, number])[]) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i]!;
-    const [xj, yj] = poly[j]!;
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
 
 const SURFACE = [L, B, R, F] as const;
 
@@ -180,7 +108,8 @@ export const STREAM_D = 'M134,147 C126,153 140,159 134,167 C129,174 117,177 120,
 // ---------------------------------------------------------------------------
 // Statik katmanlar
 
-export const Defsets = memo(function Defsets({ isDark }: { isDark: boolean }) {
+export const Defsets = memo(function Defsets({ isDark, palette }: { isDark: boolean; palette: Palette }) {
+  const pl = palette;
   return (
     <Defs>
       <RadialGradient id="mc-sky" cx="50%" cy="35%" r="75%">
@@ -192,39 +121,39 @@ export const Defsets = memo(function Defsets({ isDark }: { isDark: boolean }) {
         <Stop offset="1" stopColor="#000" stopOpacity={0} />
       </RadialGradient>
       <LinearGradient id="mc-top" x1="0" y1="0" x2="1" y2="1">
-        <Stop offset="0" stopColor="#8CC152" />
-        <Stop offset="0.55" stopColor="#4E9A38" />
-        <Stop offset="1" stopColor="#2E6B2B" />
+        <Stop offset="0" stopColor={pl.top[0]} />
+        <Stop offset="0.55" stopColor={pl.top[1]} />
+        <Stop offset="1" stopColor={pl.top[2]} />
       </LinearGradient>
       <LinearGradient id="mc-left" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0" stopColor="#6B4A2E" />
-        <Stop offset="1" stopColor="#2E2016" />
+        <Stop offset="0" stopColor={pl.left[0]} />
+        <Stop offset="1" stopColor={pl.left[1]} />
       </LinearGradient>
       <LinearGradient id="mc-right" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0" stopColor="#47321F" />
-        <Stop offset="1" stopColor="#1C140E" />
+        <Stop offset="0" stopColor={pl.right[0]} />
+        <Stop offset="1" stopColor={pl.right[1]} />
       </LinearGradient>
       <LinearGradient id="mc-hill" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0" stopColor="#A6D163" />
-        <Stop offset="1" stopColor="#3E8634" />
+        <Stop offset="0" stopColor={pl.hill[0]} />
+        <Stop offset="1" stopColor={pl.hill[1]} />
       </LinearGradient>
       <LinearGradient id="mc-mtn" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0" stopColor="#9FCB5C" />
-        <Stop offset="0.6" stopColor="#4F9A3A" />
-        <Stop offset="1" stopColor="#2F6E2C" />
+        <Stop offset="0" stopColor={pl.mtn[0]} />
+        <Stop offset="0.6" stopColor={pl.mtn[1]} />
+        <Stop offset="1" stopColor={pl.mtn[2]} />
       </LinearGradient>
       <LinearGradient id="mc-rock" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0" stopColor="#A39A86" />
-        <Stop offset="0.5" stopColor="#7C7766" />
-        <Stop offset="1" stopColor="#4F9A3A" stopOpacity={0} />
+        <Stop offset="0" stopColor={pl.rock[0]} />
+        <Stop offset="0.5" stopColor={pl.rock[1]} />
+        <Stop offset="1" stopColor={pl.mtn[1]} stopOpacity={0} />
       </LinearGradient>
       <LinearGradient id="mc-snow" x1="0" y1="0" x2="0" y2="1">
-        <Stop offset="0" stopColor="#FFFFFF" />
-        <Stop offset="1" stopColor="#DCE8F0" />
+        <Stop offset="0" stopColor={pl.snow[0]} />
+        <Stop offset="1" stopColor={pl.snow[1]} />
       </LinearGradient>
       <LinearGradient id="mc-shade" x1="0" y1="0" x2="1" y2="0">
-        <Stop offset="0" stopColor="#0B2410" stopOpacity={0.15} />
-        <Stop offset="1" stopColor="#0B2410" stopOpacity={0.5} />
+        <Stop offset="0" stopColor={pl.shade} stopOpacity={0.15} />
+        <Stop offset="1" stopColor={pl.shade} stopOpacity={0.5} />
       </LinearGradient>
       <RadialGradient id="mc-glow" cx="50%" cy="50%" r="50%">
         <Stop offset="0" stopColor="#FFE3A3" stopOpacity={0.9} />
@@ -235,7 +164,7 @@ export const Defsets = memo(function Defsets({ isDark }: { isDark: boolean }) {
 });
 
 /** Blok: gölge, yan kesitler, üst yüzey, sol tepe, tarlalar, dere, ağaçlar, pusula */
-export const Terrain = memo(function Terrain({ isDark }: { isDark: boolean }) {
+export const Terrain = memo(function Terrain({ isDark, palette }: { isDark: boolean; palette: Palette }) {
   const lB: [number, number] = [L[0], L[1] + DEPTH];
   const fB: [number, number] = [F[0], F[1] + DEPTH];
   const rB: [number, number] = [R[0], R[1] + DEPTH];
@@ -260,16 +189,16 @@ export const Terrain = memo(function Terrain({ isDark }: { isDark: boolean }) {
       {/* kaya parçaları */}
       <Path d="M40,170 l6,-2 l4,3 l-5,3 Z M88,184 l7,-1 l3,4 l-6,2 Z M200,200 l6,-3 l5,2 l-4,4 Z M262,184 l5,-2 l4,3 l-6,2 Z" fill="#000" opacity={0.22} />
       {/* şelale */}
-      <Path d="M120,189.6 L120.6,214" stroke="#8FD3F4" strokeWidth={1.4} strokeOpacity={0.8} />
+      <Path d="M120,189.6 L120.6,214" stroke={palette.water[1]} strokeWidth={1.4} strokeOpacity={0.8} />
       {/* üst yüzey */}
       <Polygon points={`${pt(L)} ${pt(B)} ${pt(R)} ${pt(F)}`} fill="url(#mc-top)" />
       {/* teraslı tarlalar */}
       <G opacity={0.55}>
-        <Polygon points="70,170 104,160 124,170 92,181" fill="#B7DB6B" />
-        <Polygon points="176,176 214,164 236,172 198,186" fill="#9DCB56" />
-        <Polygon points="236,160 268,150 284,156 252,167" fill="#B7DB6B" />
+        <Polygon points="70,170 104,160 124,170 92,181" fill={palette.fields[0]} />
+        <Polygon points="176,176 214,164 236,172 198,186" fill={palette.fields[1]} />
+        <Polygon points="236,160 268,150 284,156 252,167" fill={palette.fields[0]} />
       </G>
-      <G stroke="#2F6B2B" strokeOpacity={0.45} strokeWidth={0.6}>
+      <G stroke={palette.fieldLine} strokeOpacity={0.45} strokeWidth={0.6}>
         <Line x1={76} y1={171} x2={108} y2={162} />
         <Line x1={82} y1={175} x2={114} y2={165} />
         <Line x1={87} y1={178} x2={119} y2={168} />
@@ -279,7 +208,7 @@ export const Terrain = memo(function Terrain({ isDark }: { isDark: boolean }) {
         <Line x1={248} y1={163} x2={277} y2={154} />
       </G>
       {/* çimen kenarı */}
-      <Path d={`M${pt(L)} L${pt(F)} L${pt(R)}`} stroke="#6FAE45" strokeWidth={1.6} fill="none" />
+      <Path d={`M${pt(L)} L${pt(F)} L${pt(R)}`} stroke={palette.edge} strokeWidth={1.6} fill="none" />
       {/* sol tepe */}
       <Path
         d="M20,154 C36,138 52,116 74,111 C92,107 106,122 120,133 C130,141 138,149 146,157 L96,172 Z"
@@ -289,7 +218,7 @@ export const Terrain = memo(function Terrain({ isDark }: { isDark: boolean }) {
         d="M74,111 C92,107 106,122 120,133 C130,141 138,149 146,157 L104,170 C100,150 90,126 74,111 Z"
         fill="url(#mc-shade)"
       />
-      <G stroke="#D8F0A0" strokeOpacity={0.3} strokeWidth={0.7} fill="none">
+      <G stroke={palette.hillLine} strokeOpacity={0.3} strokeWidth={0.7} fill="none">
         <Path d="M50,128 Q74,136 104,124" />
         <Path d="M38,141 Q72,152 120,137" />
       </G>
@@ -309,101 +238,63 @@ function Rect0() {
   return <Polygon points={`0,0 ${VB_W},0 ${VB_W},${VB_H} 0,${VB_H}`} fill="url(#mc-sky)" />;
 }
 
-export const ForestLayer = memo(function ForestLayer() {
+export const ForestLayer = memo(function ForestLayer({ palette }: { palette: Palette }) {
   return (
     <G>
       {/* dere (dağ eteğinin önünden akar) */}
-      <Path d={STREAM_D} stroke="#2F7FA8" strokeWidth={2.6} strokeOpacity={0.5} fill="none" strokeLinecap="round" />
-      <Path d={STREAM_D} stroke="#6CC4EE" strokeWidth={1.5} fill="none" strokeLinecap="round" />
-      <Ellipse cx={126} cy={180} rx={5} ry={2} fill="#6CC4EE" opacity={0.9} />
+      <Path d={STREAM_D} stroke={palette.water[0]} strokeWidth={2.6} strokeOpacity={0.5} fill="none" strokeLinecap="round" />
+      <Path d={STREAM_D} stroke={palette.water[1]} strokeWidth={1.5} fill="none" strokeLinecap="round" />
+      <Ellipse cx={126} cy={180} rx={5} ry={2} fill={palette.water[1]} opacity={0.9} />
       {TREES.map((t, i) => (
         <G key={i}>
-          <Circle cx={t.x} cy={t.y} r={t.r} fill={i % 3 ? '#1F5A27' : '#2A6F30'} />
-          <Circle cx={t.x - t.r * 0.3} cy={t.y - t.r * 0.35} r={t.r * 0.45} fill="#5FA444" opacity={0.6} />
+          <Circle cx={t.x} cy={t.y} r={t.r} fill={palette.trees[i % 3 ? 0 : 1]} />
+          <Circle cx={t.x - t.r * 0.3} cy={t.y - t.r * 0.35} r={t.r * 0.45} fill={palette.treeLight} opacity={0.6} />
         </G>
       ))}
     </G>
   );
 });
 
-/** Ana dağ — seviyeye göre üç biçim */
-const MAIN_SHAPES = [
-  {
-    body: 'M108,150 C132,118 172,80 208,78 C246,80 280,112 306,137 L250,162 L150,165 Z',
-    shade: 'M208,78 C246,80 280,112 306,137 L250,162 C236,140 222,104 208,78 Z',
-    rock: null as string | null,
-    snow: null as string | null,
-  },
-  {
-    body: 'M104,150 L132,124 L150,112 L168,90 L184,80 L198,58 L208,50 L218,60 L232,72 L246,84 L262,100 L284,118 L306,137 L250,162 L150,165 Z',
-    shade: 'M208,50 L218,60 L232,72 L246,84 L262,100 L284,118 L306,137 L250,162 L230,140 L218,112 L214,86 Z',
-    rock: 'M184,80 L198,58 L208,50 L218,60 L232,72 L222,76 L214,70 L206,80 L196,76 L190,86 Z',
-    snow: null,
-  },
-  {
-    body: 'M100,150 L128,120 L150,100 L170,78 L186,56 L200,34 L208,24 L216,34 L230,52 L248,74 L268,98 L288,118 L306,137 L250,162 L150,165 Z',
-    shade: 'M208,24 L216,34 L230,52 L248,74 L268,98 L288,118 L306,137 L250,162 L230,138 L218,100 L214,60 Z',
-    rock: 'M170,78 L186,56 L230,52 L248,74 L236,80 L224,72 L212,82 L198,74 L186,84 Z',
-    snow: 'M186,56 L200,34 L208,24 L216,34 L230,52 L222,50 L216,58 L210,50 L202,58 L194,54 Z',
-  },
-];
-
-function contourLines(top: number) {
-  const out: string[] = [];
-  for (let k = 1; k <= 4; k++) {
-    const y = top + ((150 - top) * k) / 5;
-    const xl = SUMMIT_X - ((SUMMIT_X - 104) * (y - top)) / (150 - top) + 5;
-    const xr = SUMMIT_X + ((306 - SUMMIT_X) * (y - top)) / (137 - top) - 6;
-    out.push(`M${xl.toFixed(1)},${y.toFixed(1)} Q${SUMMIT_X},${(y + (xr - xl) * 0.14).toFixed(1)} ${xr.toFixed(1)},${(y - 2).toFixed(1)}`);
-  }
-  return out;
-}
-
 /** Seviyeye bağlı katman: ana dağ, eş yükselti çizgileri, kesikli patika, iğneler */
 export const LevelScene = memo(function LevelScene({
-  index,
+  geo,
+  palette,
   flag,
   standby = false,
 }: {
-  index: number;
+  geo: MountainGeometry;
+  palette: Palette;
   flag: boolean;
   /** Yatay mod: patika çizgisi ve iğneler sahnede kameraya göre ölçeklenerek ayrıca çizilir */
   standby?: boolean;
 }) {
-  const shape = MAIN_SHAPES[index]!;
-  const top = SUMMIT_Y[index]!;
-  const trail = TRAILS[index]!;
   return (
     <G>
-      <Path d={shape.body} fill="url(#mc-mtn)" />
-      {shape.rock ? <Path d={shape.rock} fill="url(#mc-rock)" /> : null}
-      <Path d={shape.shade} fill="url(#mc-shade)" />
-      {shape.snow ? (
-        <>
-          <Path d={shape.snow} fill="url(#mc-snow)" />
-          <Path d={`M208,${top} L216,34 L230,52 L222,50 L216,58 L212,40 Z`} fill="#9DB4C8" opacity={0.45} />
-        </>
-      ) : null}
-      <G stroke="#E3F5B0" strokeOpacity={0.28} strokeWidth={0.7} fill="none">
-        {contourLines(top).map((d) => (
+      <Path d={geo.body} fill="url(#mc-mtn)" />
+      {geo.rock ? <Path d={geo.rock} fill="url(#mc-rock)" /> : null}
+      <Path d={geo.shade} fill="url(#mc-shade)" />
+      {geo.snow ? <Path d={geo.snow} fill="url(#mc-snow)" /> : null}
+      {geo.snowShade ? <Path d={geo.snowShade} fill="#9DB4C8" opacity={0.45} /> : null}
+      <G stroke={palette.contour} strokeOpacity={0.28} strokeWidth={0.7} fill="none">
+        {geo.contours.map((d) => (
           <Path key={d} d={d} />
         ))}
       </G>
       {/* kesikli tam patika */}
       {standby ? null : (
-      <Path
-        d={trail.d}
-        fill="none"
-        stroke="#FFFFFF"
-        strokeOpacity={0.9}
-        strokeWidth={1.6}
-        strokeDasharray={[3, 3.5]}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+        <Path
+          d={geo.trail.d}
+          fill="none"
+          stroke="#FFFFFF"
+          strokeOpacity={0.9}
+          strokeWidth={1.6}
+          strokeDasharray={[3, 3.5]}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       )}
       {/* zirve iğnesi (kırmızı); bayrak dikilince yerini bayrağa bırakır */}
-      {!flag && !standby ? <Pin x={SUMMIT_X} y={top + 1} color="#E5483B" /> : null}
+      {!flag && !standby ? <Pin x={geo.sx} y={geo.top + 1} color="#E5483B" /> : null}
     </G>
   );
 });
@@ -432,22 +323,22 @@ function CloudShape({ x, y, s }: { x: number; y: number; s: number }) {
   );
 }
 
-const CloudsA = memo(function CloudsA({ top }: { top: number }) {
+const CloudsA = memo(function CloudsA({ top, sx }: { top: number; sx: number }) {
   return (
     <Svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`}>
       <G opacity={0.95}>
-        <CloudShape x={SUMMIT_X + 34} y={top + 4} s={0.9} />
-        <CloudShape x={SUMMIT_X + 58} y={top + 12} s={0.55} />
+        <CloudShape x={sx + 34} y={top + 4} s={0.9} />
+        <CloudShape x={sx + 58} y={top + 12} s={0.55} />
       </G>
     </Svg>
   );
 });
 
-const CloudsB = memo(function CloudsB({ top }: { top: number }) {
+const CloudsB = memo(function CloudsB({ top, sx }: { top: number; sx: number }) {
   return (
     <Svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`}>
       <G opacity={0.85}>
-        <CloudShape x={SUMMIT_X - 40} y={top + 20} s={0.7} />
+        <CloudShape x={sx - 40} y={top + 20} s={0.7} />
       </G>
       <Ellipse cx={58} cy={128} rx={22} ry={3} fill="#FFFFFF" opacity={0.18} />
     </Svg>
@@ -476,10 +367,12 @@ export function confettiD(cx: number, cy: number, b: number, from: number, step:
 
 function Clouds({
   top,
+  sx,
   clock,
   scale,
 }: {
   top: number;
+  sx: number;
   clock: SharedValue<number>;
   scale: SharedValue<number>;
 }) {
@@ -492,10 +385,10 @@ function Clouds({
   return (
     <>
       <Animated.View style={[StyleSheet.absoluteFill, b]} pointerEvents="none">
-        <CloudsB top={top} />
+        <CloudsB top={top} sx={sx} />
       </Animated.View>
       <Animated.View style={[StyleSheet.absoluteFill, a]} pointerEvents="none">
-        <CloudsA top={top} />
+        <CloudsA top={top} sx={sx} />
       </Animated.View>
     </>
   );
@@ -507,6 +400,7 @@ export function MountainClimb({
   progress,
   flag,
   running = false,
+  sceneSeed,
 }: {
   plannedMinutes: number;
   /** 0–1 */
@@ -515,14 +409,21 @@ export function MountainClimb({
   flag: boolean;
   /** Seans çalışıyor mu (kuşlar, dere parıltısı) */
   running?: boolean;
+  /** Sahne çeşidi (mevsim, zirve yeri, rota); seans boyunca sabit */
+  sceneSeed: number;
 }) {
   const { c, name } = useTheme();
   const isDark = name === 'dark';
   const reduced = useReducedMotion();
   const level = focusLevel(plannedMinutes);
   const index = Math.max(0, LEVEL_MINUTES.indexOf(level.minutes));
-  const top = SUMMIT_Y[index]!;
-  const trail = TRAILS[index]!;
+  const variant = useMemo(() => sceneVariant(sceneSeed), [sceneSeed]);
+  const palette = PALETTES[variant.biome];
+  const geos = useMemo(() => [0, 1, 2].map((i) => mountainGeometry(variant, i)), [variant]);
+  const geo = geos[index]!;
+  const top = geo.top;
+  const sx = geo.sx;
+  const trail = geo.trail;
   const p = Math.min(1, Math.max(0, progress));
   const elev = Math.round(level.altitude * p);
 
@@ -603,24 +504,24 @@ export function MountainClimb({
     const t0 = top + 1 - 18 * flagV.value;
     const w = Math.sin(clock.value * TAU * 24) * 1.8;
     const w2 = Math.sin(clock.value * TAU * 24 + 1.4) * 1.6;
-    const x = SUMMIT_X;
+    const x = sx;
     return {
       d: `M${x},${t0} Q${x + 7},${t0 - 2 + w} ${x + 15},${t0 + 1 + w2} L${x + 15},${t0 + 9 + w2} Q${x + 7},${t0 + 6 + w} ${x},${t0 + 9} Z`,
       opacity: flagV.value,
     };
-  }, [top]);
+  }, [top, sx]);
   const sparkProps = useAnimatedProps(() => ({
     r: 4 + 26 * burst.value,
     opacity: 0.8 * (1 - burst.value),
   }));
   const confA = useAnimatedProps(() => ({
-    d: confettiD(SUMMIT_X, top - 10, burst.value, 0, 2),
+    d: confettiD(sx, top - 10, burst.value, 0, 2),
     opacity: 1 - burst.value * burst.value,
-  }), [top]);
+  }), [top, sx]);
   const confB = useAnimatedProps(() => ({
-    d: confettiD(SUMMIT_X, top - 10, burst.value, 1, 2),
+    d: confettiD(sx, top - 10, burst.value, 1, 2),
     opacity: 1 - burst.value * burst.value,
-  }), [top]);
+  }), [top, sx]);
 
   const streamProps = useAnimatedProps(() => ({ strokeDashoffset: -clock.value * 240 }));
   const birdProps = useAnimatedProps(() => {
@@ -638,22 +539,22 @@ export function MountainClimb({
       style={[styles.card, { borderColor: c.line, backgroundColor: isDark ? '#121519' : '#D3DAD6' }]}
       accessible
       accessibilityRole="image"
-      accessibilityLabel={`Tırmanış: ${elev} metre, zirve ${level.altitude} metre`}
+      accessibilityLabel={`Tırmanış: ${elev} metre, zirve ${level.altitude} metre. ${sceneLabel(variant)}`}
     >
       <View style={styles.art} onLayout={onLayout}>
         <Svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`}>
-          <Defsets isDark={isDark} />
-          <Terrain isDark={isDark} />
+          <Defsets isDark={isDark} palette={palette} />
+          <Terrain isDark={isDark} palette={palette} />
           <AnimatedG animatedProps={g0}>
-            <LevelScene index={0} flag={flag && index === 0} />
+            <LevelScene geo={geos[0]!} palette={palette} flag={flag && index === 0} />
           </AnimatedG>
           <AnimatedG animatedProps={g1}>
-            <LevelScene index={1} flag={flag && index === 1} />
+            <LevelScene geo={geos[1]!} palette={palette} flag={flag && index === 1} />
           </AnimatedG>
           <AnimatedG animatedProps={g2}>
-            <LevelScene index={2} flag={flag && index === 2} />
+            <LevelScene geo={geos[2]!} palette={palette} flag={flag && index === 2} />
           </AnimatedG>
-          <ForestLayer />
+          <ForestLayer palette={palette} />
 
           {running && !reduced ? (
             <AnimatedPath
@@ -685,9 +586,9 @@ export function MountainClimb({
           {/* bayrak + kutlama */}
           {flag ? (
             <G>
-              <Circle cx={SUMMIT_X} cy={top - 8} r={22} fill="url(#mc-glow)" />
+              <Circle cx={sx} cy={top - 8} r={22} fill="url(#mc-glow)" />
               <AnimatedCircle
-                cx={SUMMIT_X}
+                cx={sx}
                 cy={top - 8}
                 fill="none"
                 stroke="#FFD27A"
@@ -695,9 +596,9 @@ export function MountainClimb({
                 animatedProps={sparkProps}
               />
               <AnimatedLine
-                x1={SUMMIT_X}
+                x1={sx}
                 y1={top + 1}
-                x2={SUMMIT_X}
+                x2={sx}
                 stroke={isDark ? '#F2F2F2' : '#2B2F35'}
                 strokeWidth={1.6}
                 strokeLinecap="round"
@@ -723,7 +624,7 @@ export function MountainClimb({
             />
           ) : null}
         </Svg>
-        <Clouds top={top} clock={clock} scale={scale} />
+        <Clouds top={top} sx={sx} clock={clock} scale={scale} />
       </View>
       <View
         style={[styles.overlay, { backgroundColor: isDark ? 'rgba(14,17,22,0.62)' : 'rgba(255,255,255,0.72)' }]}
@@ -736,6 +637,7 @@ export function MountainClimb({
           {formatNumber(elev)}
           <Txt style={[styles.elev, { color: c.mut }]}> / {formatNumber(level.altitude)} m</Txt>
         </Txt>
+        <Txt style={[styles.scene, { color: c.mut }]}>{sceneLabel(variant)}</Txt>
       </View>
     </View>
   );
@@ -755,4 +657,5 @@ const styles = StyleSheet.create({
   },
   peak: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.9 },
   elev: { fontFamily: fonts.mono, fontSize: 16 },
+  scene: { fontSize: 11 },
 });

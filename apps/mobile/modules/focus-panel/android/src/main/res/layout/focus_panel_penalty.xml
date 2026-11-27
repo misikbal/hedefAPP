@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:gravity="center_vertical"
+  android:orientation="horizontal"
+  android:paddingTop="4dp">
+
+  <TextView
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginEnd="6dp"
+    android:text="●"
+    android:textColor="@color/fp_danger"
+    android:textSize="9sp" />
+
+  <TextView
+    android:id="@+id/fp_pen_text"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:ellipsize="end"
+    android:singleLine="true"
+    android:textAppearance="@style/TextAppearance.Compat.Notification"
+    android:textSize="13sp" />
+
+  <TextView
+    android:id="@+id/fp_pen_due"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:singleLine="true"
+    android:textColor="@color/fp_danger"
+    android:textSize="12sp" />
+</LinearLayout>

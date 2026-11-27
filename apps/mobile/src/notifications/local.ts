@@ -1,6 +1,11 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { NOTIFICATION_CHANNELS, type NotificationChannel } from '@takip/shared';
+import {
+  LEGACY_NOTIFICATION_CHANNELS,
+  NOTIFICATION_CHANNELS,
+  NOTIFICATION_SOUNDS,
+  type NotificationChannel,
+} from '@takip/shared';
 
 /**
  * Yerel bildirimler ve Android kanalları. Push (sunucu) mesajları da aynı kanal kimliklerini
@@ -47,6 +52,20 @@ const CHANNEL_SETUP: Record<
     importance: Notifications.AndroidImportance.HIGH,
     description: 'Claude değişiklikleri ve onay istekleri',
   },
+  focus: {
+    name: 'Odak ve mola',
+    importance: Notifications.AndroidImportance.HIGH,
+    description: 'Odak seansı ya da mola bittiğinde',
+  },
+};
+
+/** Kanal başına titreşim (ms: bekle, titre, bekle, titre…) */
+const VIBRATION: Record<NotificationChannel, number[] | null> = {
+  reminders: [0, 180, 120, 180],
+  penalties: [0, 320, 140, 320, 140, 320],
+  motivation: null,
+  claude: [0, 120],
+  focus: [0, 140, 90, 140, 90, 420],
 };
 
 let channelsReady: Promise<void> | null = null;
@@ -55,12 +74,21 @@ let channelsReady: Promise<void> | null = null;
 export function ensureChannels(): Promise<void> {
   channelsReady ??= (async () => {
     if (Platform.OS !== 'android') return;
+    // Ses kanal oluşturulurken sabitlenir; eski (sesi varsayılan) kanallar kaldırılır.
+    for (const id of LEGACY_NOTIFICATION_CHANNELS) {
+      await Notifications.deleteNotificationChannelAsync(id).catch(() => undefined);
+    }
     for (const key of Object.keys(CHANNEL_SETUP) as NotificationChannel[]) {
       const ch = CHANNEL_SETUP[key];
+      const vibration = VIBRATION[key];
       await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS[key], {
         name: ch.name,
         importance: ch.importance,
         description: ch.description,
+        sound: NOTIFICATION_SOUNDS[key],
+        enableVibrate: vibration !== null,
+        ...(vibration ? { vibrationPattern: vibration } : {}),
+        lightColor: '#F0A63A',
       }).catch(() => undefined);
     }
   })();
@@ -109,6 +137,8 @@ export async function scheduleLocal(
       content: {
         title,
         body,
+        // iOS ve Android 8 öncesi; Android 8+ kanalın sesini çalar
+        sound: NOTIFICATION_SOUNDS[opts.channel ?? 'reminders'] ?? false,
         data: { ...(opts.url ? { url: opts.url } : {}), ...(opts.kind ? { kind: opts.kind } : {}) },
       },
       trigger: {

@@ -7,6 +7,7 @@ import { focusLevel, formatClock, formatNumber, type FocusSession } from '@takip
 import { nowTimeLocal, todayEyebrow, todayLocal } from '@/lib/date';
 import { fonts } from '@/theme/typography';
 import { StandByScene, type StandByStatus } from './StandByScene';
+import { sceneLabel, sceneVariant } from './mountainScene';
 import { ZOOM_BIRD, ZOOM_WIDE, hourOfClock, isNightHour } from './standbyMath';
 
 /*
@@ -46,6 +47,8 @@ export interface StandByViewProps {
   busy: boolean;
   error: string | null;
   onToggle: () => void;
+  /** Dağ sahnesi çeşidi */
+  sceneSeed: number;
 }
 
 export function StandByView(p: StandByViewProps) {
@@ -83,6 +86,7 @@ export function StandByView(p: StandByViewProps) {
   const level = focusLevel(p.planned);
   const elev = Math.round(level.altitude * p.progress);
   const peak = `${upper(level.name)} · ${p.planned} DK`;
+  const sceneName = sceneLabel(sceneVariant(p.sceneSeed));
   const elevText = `${formatNumber(elev)} / ${formatNumber(level.altitude)} m`;
   const remaining = formatClock(p.remainingMs);
   const showButton = controls || !p.session || p.busy;
@@ -107,6 +111,7 @@ export function StandByView(p: StandByViewProps) {
       status={status}
       zoom={zoom}
       night={night}
+      sceneSeed={p.sceneSeed}
     />
   );
 
@@ -114,6 +119,7 @@ export function StandByView(p: StandByViewProps) {
     <View style={[styles.chip, night && styles.chipNight]} pointerEvents="none">
       <Text style={[styles.lab, night && { color: C.nightMut }]}>{peak}</Text>
       <Text style={[styles.elev, night && { color: C.nightAmber }]}>{elevText}</Text>
+      <Text style={[styles.scene, night && { color: C.nightMut }]}>{sceneName}</Text>
     </View>
   );
 
@@ -247,6 +253,7 @@ const styles = StyleSheet.create({
   half: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   nightPane: { alignItems: 'stretch', justifyContent: 'flex-start', overflow: 'hidden' },
 
+  scene: { color: C.mut, fontSize: 11 },
   lab: {
     fontFamily: fonts.mono,
     fontSize: 11,

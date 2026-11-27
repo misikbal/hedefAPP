@@ -145,7 +145,25 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - Kamera = animasyonlu `viewBox` (`useFrameCallback` tek döngü: saat, ilerleme, kamera, kuş). Hesaplar `standbyMath.ts` (testli): yakınlık 1 (bütün arazi) – 30 (kuş), çift dokunuş değiştirir; zirvede en çok 3,5×. Kuş boyu dağın ~1/70'i (gerçek oran görünmez). Çizgiler 3×'ten sonra yakınlıkla ters orantılı incelir, iğneler söner. Kuş ayrı Svg + `Animated.View` (ölçek/yön/zıplama), kanat ve kuyruk `d` ile oynar. Kuşa özel hareketler 24 sn'nin tam bölenleri (zıplama 24×, kanat 120×, nefes 8×, göz kırpma 6×, z z z 10×).
 - Ekran açık kalma: seans `running` iken her yönde (`FocusLifecycle`, etiket `focus-session`); duraklatılınca ve molada normal uyku. Yatay masa saati ayrıca her zaman açık tutar.
 - Dokununca Duraklat/Devam düğmesi 4 sn görünür; seans yokken Başlat hep görünür.
+- Kamera düzeltmesi (2026-11-27): native'de `viewBox` dizgesi Reanimated ile canlandırılamıyor (react-native-svg onu render'da `minX/minY/vbWidth/vbHeight`'e çevirir; kuş büyüyor, dağ yerinde kalıyordu). `StandByScene` native'de bu dört alanı doğrudan canlandırır, web'de `viewBox`.
 - Doğrulanamayanlar (yalnızca cihazda): animasyonlu `viewBox` ve `transformOrigin`'li kuş `View`'ı, titreme, ekran dönüşünde sekme çubuğu/durum çubuğu davranışı.
+
+## Dağ sahnesi çeşitleri (2026-11-27, onay bekliyor)
+
+- `features/focus/mountainScene.ts` (saf, testli): tohumdan mevsim (Yaz, Sonbahar, Kış, Kanyon → `PALETTES`), zirve x'i (192–226), sırt (seviye 0 yuvarlak kubbe, 1–2 pürüzlü, yarısında sağ sırtta ikinci tepe), kaya/kar bandı ve 5 rota (zikzak, geniş kıvrım, sık viraj, batı sırtı, doğu yamacı) üretilir. Seviye yükseklikleri (78/50/24) ve arazi bloğu sabit.
+- Dikey `MountainClimb` ve yatay `StandByScene` aynı geometriyi kullanır; etikette "Sonbahar · Batı sırtı" görünür.
+- Tohum `focusStore.sceneSeed` (kalıcı): seans boyunca sabit; `lastFinish` temizlenince (`setFocus`) ya da seans sıfırlanınca (`rerollScene`) yenisi seçilir, yeni sahne mevsim ya da rotada öncekinden farklıdır.
+- Testler: `npx vitest run apps/mobile/src/features/focus`.
+
+## Bildirim sesleri ve odak paneli (2026-11-27, onay bekliyor)
+
+- Sesler `apps/mobile/assets/sounds/*.wav`, `python3 -I scripts/make-sounds.py` ile sentezlenir (bağımlılık yok): hatırlatma (iki notalı çan), ceza (alçak, iki kez), zirve (odak/mola bitti, yükselen arpej), bildirim (Claude, kısa cam tonu). Motivasyon sessiz (LOW). expo-notifications eklentisi `sounds` + `icon` (monokrom ikon → `notification_icon`).
+- Android kanal sesi sonradan değişmez: kanallar `_v2` kimlikli (`@takip/shared → NOTIFICATION_CHANNELS`), eskileri `ensureChannels`'ta silinir. Yeni kanal `focus` (odak ve mola bitişi). Ses eşlemesi `NOTIFICATION_SOUNDS`; push `channelId` artık kanal kimliğini (değeri) gönderir, `sound` iOS için.
+- Kanal başına titreşim deseni (`local.ts → VIBRATION`).
+- Odak paneli yerel modül `apps/mobile/modules/focus-panel` (Kotlin, RemoteViews + DecoratedCustomViewStyle, npm bağımlılığı yok): kapalıyken canlı geri sayım (Chronometer) + bitiş saati; açınca seans ilerleme çubuğu (süreç ayaktayken 30 sn'de bir), bugünün hedefleri (en çok 4, çubuklu; tamamlananlar yeşil), açık cezalar (en çok 2, fazlası "2+"), "Duraklat/Devam et" ve "Uygulamayı aç" düğmeleri. Açık/koyu tema `values-night` renkleriyle. Bitişten 2 dk sonra kendiliğinden kalkar (`setTimeoutAfter`).
+- İçerik saf model `src/notifications/focusPanelModel.ts` (testli: `npx vitest run apps/mobile/src/notifications`). Modül yoksa (Expo Go, iOS) aynı modelden düz metin expo-notifications paneli.
+- Düğme `takip://focus?panel=toggle&s=<id>:<durum>` açar; Odak sekmesi yalnız durum eşleşirse duraklatır/devam ettirir (eski düğme yanlış işlem yapmaz). Uygulama açılır; arka planda işlem yok.
+- Sınır: Android 14+ kalıcı (ongoing) bildirimi kullanıcı kaydırarak kapatabilir (ön plan hizmeti kullanılmadı). Native + ses dosyaları: development build yeniden alınmalı. Kotlin burada derlenmedi (SDK yok).
 
 ## Günlük analizi kararları (2026-11-27, onay bekliyor)
 

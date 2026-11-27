@@ -1,5 +1,10 @@
 import { Expo, type ExpoPushMessage, type ExpoPushTicket } from 'expo-server-sdk';
-import { CHANNEL_FOR_TYPE, type NotificationType } from '@takip/shared';
+import {
+  CHANNEL_FOR_TYPE,
+  NOTIFICATION_CHANNELS,
+  NOTIFICATION_SOUNDS,
+  type NotificationType,
+} from '@takip/shared';
 
 export interface PushMessage {
   to: string;
@@ -30,8 +35,9 @@ function toExpo(m: PushMessage): ExpoPushMessage {
     title: m.title,
     body: m.body,
     data: m.data,
-    sound: 'default',
-    channelId: CHANNEL_FOR_TYPE[m.type],
+    // Android'de kanalın sesi çalar; `sound` iOS içindir (motivasyon sessiz değil, varsayılan).
+    sound: NOTIFICATION_SOUNDS[CHANNEL_FOR_TYPE[m.type]] ?? 'default',
+    channelId: NOTIFICATION_CHANNELS[CHANNEL_FOR_TYPE[m.type]],
     priority: m.type === 'penalty' || m.type === 'claude' ? 'high' : 'normal',
   };
 }

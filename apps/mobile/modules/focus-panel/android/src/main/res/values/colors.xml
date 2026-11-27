@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Açık bildirim arka planı: koyu amber ve kırmızı (okunur kontrast) -->
+  <color name="fp_accent">#B5690A</color>
+  <color name="fp_danger">#C0392B</color>
+  <color name="fp_done">#2E8B3E</color>
+  <color name="fp_track">#1F000000</color>
+  <color name="fp_muted">#8A000000</color>
+</resources>

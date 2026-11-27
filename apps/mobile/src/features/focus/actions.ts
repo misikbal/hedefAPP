@@ -13,7 +13,7 @@ import { keys } from '@/api/hooks';
 import { queryClient } from '@/api/queryClient';
 import { hideFocusPanel, updateFocusPanel } from '@/notifications/focusPanel';
 import { cancelLocal, scheduleLocal } from '@/notifications/local';
-import { focusNow, resetFocusDevice, setFocus, useFocusStore } from '@/store/focusStore';
+import { focusNow, rerollScene, resetFocusDevice, setFocus, useFocusStore } from '@/store/focusStore';
 import { stopGuard, syncGuard } from './guard';
 
 /**
@@ -44,7 +44,7 @@ async function rescheduleEnd(s: FocusSession | null) {
       new Date(Date.now() + remaining),
       'Zirvedesin',
       `${s.plannedMinutes} dakikalık odak seansı bitti. Kaydetmeyi unutma.`,
-      { url: '/focus', kind: 'focus_end' },
+      { url: '/focus', kind: 'focus_end', channel: 'focus' },
     );
   }
   setFocus({ endNotificationId: id });
@@ -89,7 +89,10 @@ async function transition(id: string, action: 'pause' | 'resume' | 'abandon') {
     const s = await api<FocusSession>(`/focus/${id}/${action}`, { method: 'POST' });
     apply(s);
     await rescheduleEnd(isOpen(s) ? s : null);
-    if (action === 'abandon') invalidateFocus();
+    if (action === 'abandon') {
+      rerollScene();
+      invalidateFocus();
+    }
     return s;
   } catch (e) {
     // Sunucu durumu farklıysa (ör. başka cihazdan bitti) cihazı eşitle.
@@ -169,6 +172,7 @@ export async function startBreak(minutes = FOCUS_BREAK_MINUTES): Promise<void> {
   const id = await scheduleLocal(new Date(endsAt), 'Mola bitti', 'Sıradaki tırmanışa hazırsın.', {
     url: '/focus',
     kind: 'focus_break',
+    channel: 'focus',
   });
   setFocus({ breakNotificationId: id });
 }

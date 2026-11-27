@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Odak paneli: açık görünüm. Hedef ve ceza satırları koddan eklenir (en çok ~256dp). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical">
+
+  <TextView
+    android:id="@+id/fp_eyebrow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:fontFamily="sans-serif-medium"
+    android:letterSpacing="0.08"
+    android:singleLine="true"
+    android:textColor="@color/fp_accent"
+    android:textSize="11sp" />
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:baselineAligned="true"
+    android:gravity="bottom"
+    android:orientation="horizontal">
+
+    <Chronometer
+      android:id="@+id/fp_chrono"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:fontFamily="sans-serif-medium"
+      android:includeFontPadding="false"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+      android:textSize="32sp" />
+
+    <TextView
+      android:id="@+id/fp_static"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:fontFamily="sans-serif-medium"
+      android:includeFontPadding="false"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+      android:textSize="32sp"
+      android:visibility="gone" />
+
+    <TextView
+      android:id="@+id/fp_meta"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="10dp"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:maxLines="2"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Line2"
+      android:textSize="13sp" />
+  </LinearLayout>
+
+  <ProgressBar
+    android:id="@+id/fp_progress"
+    style="?android:attr/progressBarStyleHorizontal"
+    android:layout_width="match_parent"
+    android:layout_height="4dp"
+    android:layout_marginTop="8dp"
+    android:max="1000"
+    android:progressDrawable="@drawable/focus_panel_progress" />
+
+  <TextView
+    android:id="@+id/fp_goals_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="10dp"
+    android:fontFamily="sans-serif-medium"
+    android:letterSpacing="0.08"
+    android:textColor="@color/fp_muted"
+    android:textSize="11sp" />
+
+  <LinearLayout
+    android:id="@+id/fp_goals"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical" />
+
+  <TextView
+    android:id="@+id/fp_pen_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:fontFamily="sans-serif-medium"
+    android:letterSpacing="0.08"
+    android:textColor="@color/fp_danger"
+    android:textSize="11sp" />
+
+  <LinearLayout
+    android:id="@+id/fp_penalties"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical" />
+</LinearLayout>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="fp_accent">#F0A63A</color>
+  <color name="fp_danger">#FF6B5E</color>
+  <color name="fp_done">#5CC26B</color>
+  <color name="fp_track">#33FFFFFF</color>
+  <color name="fp_muted">#99FFFFFF</color>
+</resources>

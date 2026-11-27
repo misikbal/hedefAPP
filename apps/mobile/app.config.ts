@@ -27,6 +27,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
   backgroundColor: '#0E1116',
+  // Hedef Android; iOS kimliği yalnızca `expo prebuild` platformsuz çalışınca sormasın diye
+  ios: { bundleIdentifier: 'com.takip.app' },
   android: {
     package: 'com.takip.app',
     adaptiveIcon: {
@@ -42,7 +44,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-router',
     'expo-font',
     'expo-status-bar',
-    ['expo-notifications', { color: '#F0A63A', defaultChannel: 'reminders' }],
+    [
+      'expo-notifications',
+      {
+        color: '#F0A63A',
+        defaultChannel: 'reminders_v2',
+        // Durum çubuğu ikonu (beyaz siluet); yerel odak paneli de `notification_icon`'u kullanır
+        icon: './assets/android-icon-monochrome.png',
+        sounds: [
+          './assets/sounds/takip_hatirlatma.wav',
+          './assets/sounds/takip_ceza.wav',
+          './assets/sounds/takip_zirve.wav',
+          './assets/sounds/takip_bildirim.wav',
+        ],
+      },
+    ],
     [
       'expo-splash-screen',
       { image: './assets/splash-icon.png', imageWidth: 160, backgroundColor: '#0E1116' },

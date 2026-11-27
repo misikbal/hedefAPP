@@ -1,5 +1,5 @@
-import { memo, useEffect } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { memo, useEffect, useMemo } from 'react';
+import { Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -28,18 +28,14 @@ import {
   LOOP_MS,
   LevelScene,
   Pin,
-  START,
   STREAM_D,
-  SUMMIT_X,
-  SUMMIT_Y,
   TAU,
-  TRAILS,
   Terrain,
   VB_H,
   VB_W,
   confettiD,
-  trailAt,
 } from './MountainClimb';
+import { PALETTES, START, mountainGeometry, sceneVariant, trailAt } from './mountainScene';
 import {
   BIRD_DRAW_HEIGHT,
   BIRD_HEIGHT,
@@ -58,6 +54,7 @@ import {
  */
 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
+const IS_WEB = Platform.OS === 'web';
 const AnimatedG = Animated.createAnimatedComponent(G);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -148,6 +145,7 @@ export function StandByScene({
   status,
   zoom,
   night,
+  sceneSeed,
 }: {
   plannedMinutes: number;
   /** 0–1 */
@@ -156,11 +154,19 @@ export function StandByScene({
   /** Kamera yakınlığı hedefi (1 = bütün arazi) */
   zoom: number;
   night: boolean;
+  /** Sahne çeşidi (mevsim, zirve yeri, rota); seans boyunca sabit */
+  sceneSeed: number;
 }) {
   const reduced = useReducedMotion();
   const index = Math.max(0, (FOCUS_MINUTES as readonly number[]).indexOf(plannedMinutes));
-  const top = SUMMIT_Y[index]!;
-  const trail = TRAILS[index]!;
+  const variant = useMemo(() => sceneVariant(sceneSeed), [sceneSeed]);
+  const palette = PALETTES[variant.biome];
+  const geo = useMemo(() => mountainGeometry(variant, index), [variant, index]);
+  const top = geo.top;
+  const sx = geo.sx;
+  const trail = geo.trail;
+  const perchX = geo.perch[0];
+  const perchY = geo.perch[1];
   const p = Math.min(1, Math.max(0, progress));
   const flag = status === 'done';
   const mode: BudgieMode = status === 'paused' ? 'sleep' : status === 'done' ? 'cheer' : 'run';
@@ -247,15 +253,15 @@ export function StandByScene({
     const behind = trailAt(trail.pts, trail.cum, trail.len, Math.max(0, prog - 0.004));
     const dirTarget = done ? 1 : ahead.x - behind.x >= 0 ? 1 : -1;
     dirV.value += (dirTarget - dirV.value) * (still ? 1 : smoothing(dt, 90));
-    const bx = done ? SUMMIT_X - 11 : q.x;
-    const by = done ? top + 2 : q.y;
+    const bx = done ? perchX : q.x;
+    const by = done ? perchY : q.y;
     worldX.value = bx;
     worldY.value = by;
 
     // kamera
     const aspect = paneW.value / Math.max(1, paneH.value);
     const z = done ? Math.min(zoomV.value, ZOOM_SUMMIT_MAX) : zoomV.value;
-    const fx = done ? SUMMIT_X - 4 : bx;
+    const fx = done ? sx - 4 : bx;
     const fy = done ? top + 8 : by - BIRD_HEIGHT * 0.45;
     const tg = cameraTarget(z, aspect, fx, fy);
     if (camReady.value === 0 || still) {
@@ -312,12 +318,18 @@ export function StandByScene({
   });
 
   // --- animasyonlu özellikler
+  // Kamera: native'de react-native-svg `viewBox` dizgesini JS'te minX/minY/vbWidth/vbHeight'e çevirir;
+  // Reanimated render'ı atladığı için dizge native'e ulaşmaz (dağ yerinde kalır). Bu yüzden native
+  // alanlar doğrudan canlandırılır; web'de DOM `viewBox` özniteliği kullanılır.
   const svgProps = useAnimatedProps(() => {
     const vw = camVw.value;
     const vh = vw / camAspect.value;
-    return {
-      viewBox: `${(camCx.value - vw / 2).toFixed(4)} ${(camCy.value - vh / 2).toFixed(4)} ${vw.toFixed(4)} ${vh.toFixed(4)}`,
-    };
+    const minX = camCx.value - vw / 2;
+    const minY = camCy.value - vh / 2;
+    if (IS_WEB) {
+      return { viewBox: `${minX.toFixed(4)} ${minY.toFixed(4)} ${vw.toFixed(4)} ${vh.toFixed(4)}` };
+    }
+    return { minX, minY, vbWidth: vw, vbHeight: vh } as unknown as { viewBox: string };
   });
   const fillProps = useAnimatedProps(
     () => ({ strokeDashoffset: trail.len * (1 - pv.value), strokeWidth: 2.6 * ls.value }),
@@ -359,23 +371,23 @@ export function StandByScene({
     const t0 = top + 1 - 18 * flagV.value;
     const w = Math.sin(clock.value * TAU * 24) * 1.8;
     const w2 = Math.sin(clock.value * TAU * 24 + 1.4) * 1.6;
-    const x = SUMMIT_X;
+    const x = sx;
     return {
       d: `M${x},${t0} Q${x + 7},${t0 - 2 + w} ${x + 15},${t0 + 1 + w2} L${x + 15},${t0 + 9 + w2} Q${x + 7},${t0 + 6 + w} ${x},${t0 + 9} Z`,
       opacity: flagV.value,
     };
-  }, [top]);
+  }, [top, sx]);
   const sparkProps = useAnimatedProps(() => ({
     r: 4 + 26 * burst.value,
     opacity: 0.8 * (1 - burst.value),
   }));
   const confA = useAnimatedProps(
-    () => ({ d: confettiD(SUMMIT_X, top - 10, burst.value, 0, 2), opacity: 1 - burst.value * burst.value }),
-    [top],
+    () => ({ d: confettiD(sx, top - 10, burst.value, 0, 2), opacity: 1 - burst.value * burst.value }),
+    [top, sx],
   );
   const confB = useAnimatedProps(
-    () => ({ d: confettiD(SUMMIT_X, top - 10, burst.value, 1, 2), opacity: 1 - burst.value * burst.value }),
-    [top],
+    () => ({ d: confettiD(sx, top - 10, burst.value, 1, 2), opacity: 1 - burst.value * burst.value }),
+    [top, sx],
   );
 
   const birdStyle = useAnimatedStyle(() => ({
@@ -401,10 +413,10 @@ export function StandByScene({
         preserveAspectRatio="xMidYMid meet"
         animatedProps={svgProps}
       >
-        <Defsets isDark />
-        <Terrain isDark />
-        <LevelScene index={index} flag={false} standby />
-        <ForestLayer />
+        <Defsets isDark palette={palette} />
+        <Terrain isDark palette={palette} />
+        <LevelScene geo={geo} palette={palette} flag={false} standby />
+        <ForestLayer palette={palette} />
 
         <AnimatedPath
           d={STREAM_D}
@@ -439,14 +451,14 @@ export function StandByScene({
 
         <AnimatedG animatedProps={pinProps}>
           <Pin x={START[0]} y={START[1]} color="#3DBE4F" />
-          {flag ? null : <Pin x={SUMMIT_X} y={top + 1} color="#E5483B" />}
+          {flag ? null : <Pin x={sx} y={top + 1} color="#E5483B" />}
         </AnimatedG>
 
         {flag ? (
           <G>
-            <Circle cx={SUMMIT_X} cy={top - 8} r={22} fill="url(#mc-glow)" />
+            <Circle cx={sx} cy={top - 8} r={22} fill="url(#mc-glow)" />
             <AnimatedCircle
-              cx={SUMMIT_X}
+              cx={sx}
               cy={top - 8}
               fill="none"
               stroke="#FFD27A"
@@ -454,9 +466,9 @@ export function StandByScene({
               animatedProps={sparkProps}
             />
             <AnimatedLine
-              x1={SUMMIT_X}
+              x1={sx}
               y1={top + 1}
-              x2={SUMMIT_X}
+              x2={sx}
               stroke="#F2F2F2"
               strokeWidth={1.6}
               strokeLinecap="round"
@@ -477,9 +489,9 @@ export function StandByScene({
           animatedProps={flyProps}
         />
 
-        <SwayCloud x={SUMMIT_X - 40} y={top + 20} s={0.7} opacity={0.85} sway={swayB} />
-        <SwayCloud x={SUMMIT_X + 34} y={top + 4} s={0.9} opacity={0.95} sway={swayA} />
-        <SwayCloud x={SUMMIT_X + 58} y={top + 12} s={0.55} opacity={0.95} sway={swayA} />
+        <SwayCloud x={sx - 40} y={top + 20} s={0.7} opacity={0.85} sway={swayB} />
+        <SwayCloud x={sx + 34} y={top + 4} s={0.9} opacity={0.95} sway={swayA} />
+        <SwayCloud x={sx + 58} y={top + 12} s={0.55} opacity={0.95} sway={swayA} />
       </AnimatedSvg>
 
       {/* kuş: kendi Svg'si, dünya koordinatından piksele çevrilip yerleştirilir */}

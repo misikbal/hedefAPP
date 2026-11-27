@@ -7,6 +7,7 @@ import {
 } from '@takip/shared';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { nextSceneSeed } from '@/features/focus/mountainScene';
 
 /**
  * Odak sayacının cihazdaki durumu (AsyncStorage'da kalıcı). Asıl kaynak sunucudur;
@@ -27,6 +28,8 @@ interface FocusState {
   /** Seçici: süre ve etiket */
   plannedMinutes: FocusMinutes;
   label: string;
+  /** Dağ sahnesi çeşidi; seans boyunca sabit, bir tırmanış kapanınca yenisi seçilir */
+  sceneSeed: number;
 }
 
 const initial: FocusState = {
@@ -39,6 +42,7 @@ const initial: FocusState = {
   breakNotificationId: null,
   plannedMinutes: 50,
   label: '',
+  sceneSeed: nextSceneSeed(),
 };
 
 export const useFocusStore = create<FocusState>()(
@@ -59,7 +63,19 @@ export const useFocusStore = create<FocusState>()(
 /** Sunucu saatine göre düzeltilmiş "şimdi" */
 export const focusNow = () => Date.now() + useFocusStore.getState().clockOffsetMs;
 
-export const setFocus = (patch: Partial<FocusState>) => useFocusStore.setState(patch);
+/** `lastFinish` temizlenince (zirve görünümü kapanınca) yeni dağ sahnesi seçilir. */
+export const setFocus = (patch: Partial<FocusState>) => {
+  const prev = useFocusStore.getState();
+  const next =
+    patch.lastFinish === null && prev.lastFinish && patch.sceneSeed === undefined
+      ? { ...patch, sceneSeed: nextSceneSeed(prev.sceneSeed) }
+      : patch;
+  useFocusStore.setState(next);
+};
+
+/** Sıfırlanan (terk edilen) tırmanıştan sonra yeni dağ sahnesi */
+export const rerollScene = () =>
+  useFocusStore.setState((s) => ({ sceneSeed: nextSceneSeed(s.sceneSeed) }));
 
 /** Çıkışta cihazdaki odak durumu temizlenir (seçici tercihleri kalır). */
 export const resetFocusDevice = () =>

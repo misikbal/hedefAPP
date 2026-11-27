@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import {
   FOCUS_MINUTES,
@@ -66,6 +66,7 @@ export default function FocusScreen() {
   const plannedPick = useFocusStore((s) => s.plannedMinutes);
   const labelPick = useFocusStore((s) => s.label);
   const breakEndsAt = useFocusStore((s) => s.breakEndsAt);
+  const sceneSeed = useFocusStore((s) => s.sceneSeed);
   const week = useFocusWeek();
   const labels = useFocusLabels();
 
@@ -136,6 +137,18 @@ export default function FocusScreen() {
     return run(() => startFocus({ label, plannedMinutes: plannedPick }));
   };
 
+  // Bildirim panelindeki Duraklat/Devam düğmesi: takip://focus?panel=toggle&s=<id>:<durum>.
+  // Durum eşleşmiyorsa (eski düğme, başka cihazdan değişmiş) hiçbir şey yapılmaz.
+  const params = useLocalSearchParams<{ panel?: string; s?: string }>();
+  useEffect(() => {
+    if (params.panel !== 'toggle' || !useFocusStore.persist.hasHydrated()) return;
+    router.setParams({ panel: undefined, s: undefined });
+    const cur = useFocusStore.getState().session;
+    if (!cur || params.s !== `${cur.id}:${cur.status}`) return;
+    void run(() => (cur.status === 'running' ? pauseFocus(cur.id) : resumeFocus(cur.id)));
+    // run her render'da yeniden oluşur; yalnızca bağlantı ve seans değişince çalışmalı
+  }, [params.panel, params.s, session?.id, session?.status]);
+
   const reset = () => {
     if (session) setConfirmReset(true);
     else if (lastFinish) setFocus({ lastFinish: null });
@@ -180,6 +193,7 @@ export default function FocusScreen() {
         busy={busy}
         error={error}
         onToggle={() => void toggle()}
+        sceneSeed={sceneSeed}
       />
     );
   }
@@ -278,6 +292,7 @@ export default function FocusScreen() {
         progress={progress}
         flag={summit}
         running={session?.status === 'running'}
+        sceneSeed={sceneSeed}
       />
 
       <GuardStatus />
