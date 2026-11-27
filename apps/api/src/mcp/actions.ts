@@ -22,6 +22,7 @@ import {
   type BlockDoc,
 } from '../db/models/index.js';
 import { AppError } from '../lib/errors.js';
+import { mcpPermissionsOf } from '../lib/serialize.js';
 import { recordAudit, snapshotOf } from '../services/audit.js';
 import { archiveBlock, createBlock, getBlock, updateBlock } from '../services/blocks.js';
 import { clock } from '../services/clock.js';
@@ -31,7 +32,7 @@ import { blockPenaltyTexts, markPenaltyDone, postponePenalty } from '../services
 import { createRule, getRule, toRuleDtos, updateRule } from '../services/penaltyRules.js';
 import { logProgress } from '../services/progress.js';
 import { putJournal } from '../services/journal.js';
-import type { UserContext } from '../services/users.js';
+import { getSettings, type UserContext } from '../services/users.js';
 
 /**
  * Claude'un yazma işlemleri. Her işlem iki yoldan çalışır:
@@ -415,7 +416,10 @@ async function applyWrite(
       const { date, input } = writeArgSchemas.write_journal.parse(rawArgs);
       const existing = await JournalEntry.findOne({ userId: user.id, date }).lean();
       const before = existing ? await snapshotOf('journal', existing._id) : null;
-      const entry = await putJournal(user, date, input as never);
+      const perms = mcpPermissionsOf(await getSettings(user.id));
+      const journalInput = { ...input };
+      if (!perms.journalRawNote) delete journalInput.rawNote;
+      const entry = await putJournal(user, date, journalInput as never, { source: 'claude' });
       return {
         entity: 'journal',
         entityId: entry._id,
@@ -423,7 +427,20 @@ async function applyWrite(
         after: await snapshotOf('journal', entry._id),
         summary: `${date} günlüğünü ${existing ? 'güncelledi' : 'yazdı'}`,
         message: `${date} günlüğü ${existing ? 'güncellendi' : 'kaydedildi'}.`,
-        data: { date, mood: entry.mood },
+        data: {
+          date,
+          mood: entry.mood,
+          energy: entry.energy ?? null,
+          tags: entry.tags ?? [],
+          summary: entry.summary ?? null,
+          daySnapshot: entry.daySnapshot
+            ? {
+                blocksPlanned: entry.daySnapshot.blocksPlanned,
+                blocksDone: entry.daySnapshot.blocksDone,
+                sportDone: entry.daySnapshot.sportDone ?? null,
+              }
+            : null,
+        },
       };
     }
   }

@@ -25,6 +25,7 @@ const settingsSchema = new Schema(
       blockDelete: { ...permission, default: 'approve' },
       penaltyRuleWrite: { ...permission, default: 'approve' },
       journalRead: { type: Boolean, default: false },
+      journalRawNote: { type: Boolean, default: true },
     },
     /** Son başarılı MCP isteği (Claude bağlantısı ekranı) */
     mcpLastAccessAt: { type: Date, default: null },

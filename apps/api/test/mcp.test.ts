@@ -8,6 +8,7 @@ import {
   AuditLog,
   Block,
   BlockInstance,
+  JournalEntry,
   Notification,
   PendingChange,
   Settings,
@@ -138,6 +139,7 @@ describe('Claude (MCP)', () => {
       blockDelete: 'approve',
       penaltyRuleWrite: 'approve',
       journalRead: false,
+      journalRawNote: true,
     });
   });
 
@@ -350,6 +352,41 @@ describe('Claude (MCP)', () => {
     expect(open.content[0]!.text).toContain('iyi');
     const settings = await getSettings(user.id);
     expect(settings.mcpPermissions?.journalRead).toBe(true);
+  });
+
+  it('write_journal yeni alanlar: kaynak claude, rawNote ayarı, insights izinli', async () => {
+    const w = await call('write_journal', {
+      mood: 3,
+      energy: 1,
+      tags: ['Kod', 'Bahçe'],
+      summary: 'Kod tamam, öğleden sonra yoruldum.',
+      rawNote: 'Bugün kod iyi gitti ama yoruldum',
+    });
+    expect(w.isError).toBeFalsy();
+    let entry = await JournalEntry.findOne({ userId: user.id }).lean();
+    expect(entry).toMatchObject({
+      source: 'claude',
+      energy: 1,
+      tags: ['kod', 'other:bahçe'],
+      rawNote: 'Bugün kod iyi gitti ama yoruldum',
+    });
+    expect(entry!.daySnapshot).toBeTruthy();
+    // kısmi güncelleme: etiketler ve enerji kalır
+    await call('write_journal', { hard: 'Almanca kaçtı' });
+    entry = await JournalEntry.findOne({ userId: user.id }).lean();
+    expect(entry).toMatchObject({ energy: 1, tags: ['kod', 'other:bahçe'], hard: 'Almanca kaçtı' });
+
+    await setPerm({ journalRawNote: false });
+    await call('write_journal', { rawNote: 'saklanmamalı' });
+    entry = await JournalEntry.findOne({ userId: user.id }).lean();
+    expect(entry!.rawNote).toBe('Bugün kod iyi gitti ama yoruldum');
+
+    const closed = await call('get_journal_insights');
+    expect(closed.isError).toBe(true);
+    await setPerm({ journalRead: true });
+    const open = await call('get_journal_insights', { range: 'week' });
+    expect(open.isError).toBeFalsy();
+    expect(open.content[0]!.text).toContain('"moodAvg":3');
   });
 
   it('okuma araçları çalışır', async () => {

@@ -68,3 +68,129 @@ describe('metinler', () => {
     expect(journalPreview({ wentWell: null, hard: ' Zor gün ', tomorrowOne: 'x' })).toBe('Zor gün');
   });
 });
+
+import {
+  computeJournalInsights,
+  journalFindings,
+  journalTagLabel,
+  normalizeJournalTags,
+  type InsightEntryInput,
+} from './journal.js';
+
+describe('etiketler', () => {
+  it('küçük harf, tekrarsız, en çok 5; liste dışı other: önekli', () => {
+    expect(
+      normalizeJournalTags([
+        'Yorgunluk',
+        'yorgunluk',
+        ' #KOD ',
+        'Bahçe',
+        'other:bahçe',
+        '',
+        'spor',
+        'dil',
+        'uyku',
+      ]),
+    ).toEqual(['yorgunluk', 'kod', 'other:bahçe', 'spor', 'dil']);
+    expect(normalizeJournalTags(['İŞ'])).toEqual(['iş']);
+    expect(journalTagLabel('other:bahçe')).toBe('bahçe');
+  });
+});
+
+describe('computeJournalInsights', () => {
+  const e = (
+    date: string,
+    mood: number,
+    energy: number | null,
+    sportDone: boolean | null,
+    done: number,
+    missed: number,
+    tags: string[] = [],
+  ): InsightEntryInput => ({
+    date,
+    mood,
+    energy,
+    tags,
+    summary: `${date} özeti`,
+    snapshot: { blocksDone: done, blocksMissed: missed, sportDone },
+  });
+  const base = {
+    from: '2026-11-23',
+    to: '2026-11-29',
+    asOf: '2026-11-29',
+    completion: new Map([
+      ['2026-11-23', { done: 3, missed: 1 }],
+      ['2026-11-24', { done: 1, missed: 3 }],
+    ]),
+    missed: [
+      { category: 'language', startTime: '15:00' },
+      { category: 'language', startTime: '15:30' },
+      { category: 'sport', startTime: '07:00' },
+    ],
+    sportResults: [false, true, true, true],
+    journalDates: new Set(['2026-11-27', '2026-11-28', '2026-11-29']),
+  };
+
+  it('az veride karşılaştırmalar null', () => {
+    const r = computeJournalInsights({ ...base, entries: [e('2026-11-23', 3, 2, true, 1, 0)] });
+    expect(r.moodWhenSportDone).toBeNull();
+    expect(r.moodWhenSportMissed).toBeNull();
+    expect(r.completionByEnergy).toEqual({ low: null, high: null });
+    expect(r.moodTrend).toBeNull();
+    expect(r.entries).toBe(1);
+    expect(journalFindings(r).some((f) => f.includes('Spor'))).toBe(false);
+  });
+
+  it('ortalamalar, eğilim, gruplar, etiketler, kaçanlar, seriler', () => {
+    const entries = [
+      e('2026-11-23', 4, 4, true, 4, 0, ['kod', 'spor']),
+      e('2026-11-24', 3, 3, true, 3, 1, ['kod']),
+      e('2026-11-25', 4, 4, true, 4, 0, ['kod', 'yorgunluk']),
+      e('2026-11-26', 1, 1, false, 1, 3, ['yorgunluk']),
+      e('2026-11-27', 1, 0, false, 1, 2, ['yorgunluk']),
+      e('2026-11-28', 2, 1, false, 2, 2),
+    ];
+    const r = computeJournalInsights({ ...base, entries });
+    expect(r.range).toBe('2026-11-23..2026-11-29');
+    expect(r.entries).toBe(6);
+    expect(r.moodAvg).toBe(2.5);
+    expect(r.moodTrend).toBe('down');
+    expect(r.energyAvg).toBe(2.2);
+    expect(r.completionRate).toBe(0.5);
+    expect(r.moodWhenSportDone).toBe(3.7);
+    expect(r.moodWhenSportMissed).toBe(1.3);
+    expect(r.completionByEnergy).toEqual({ high: 0.92, low: 0.36 });
+    expect(r.topTags).toEqual([
+      ['kod', 3],
+      ['yorgunluk', 3],
+      ['spor', 1],
+    ]);
+    expect(r.mostMissedCategory).toBe('language');
+    expect(r.mostMissedTimeSlot).toBe('14:00-16:00');
+    expect(r.streaks).toEqual({ journal: 3, sport: 3 });
+    expect(r.lowMoodStreak).toBe(0);
+    expect(r.lowestDay).toEqual({ date: '2026-11-27', mood: 1, summary: '2026-11-27 özeti' });
+    expect(r.days).toHaveLength(7);
+    expect(r.days[1]).toEqual({ date: '2026-11-24', mood: 3, energy: 3, completion: 0.25 });
+    expect(r.days[6]).toEqual({ date: '2026-11-29', mood: null, energy: null, completion: null });
+
+    const f = journalFindings(r);
+    expect(f).toHaveLength(3);
+    expect(f[0]).toBe('Spor yaptığın günlerde ruh hâli ortalaman 3,7, yapmadığın günlerde 1,3.');
+    expect(f[1]).toBe('Enerjin yüksek günlerde tamamlama %92, düşük günlerde %36.');
+    expect(f[2]).toBe('En çok Dil blokları kaçtı; çoğu 14:00–16:00 arası.');
+  });
+
+  it('art arda düşük ruh hâli sayılır', () => {
+    const r = computeJournalInsights({
+      ...base,
+      entries: [
+        e('2026-11-25', 3, null, null, 0, 0),
+        e('2026-11-26', 1, null, null, 0, 0),
+        e('2026-11-27', 0, null, null, 0, 0),
+      ],
+    });
+    expect(r.lowMoodStreak).toBe(2);
+    expect(r.energyAvg).toBeNull();
+  });
+});

@@ -98,7 +98,12 @@ export async function deleteTransaction(user: UserContext, id: string): Promise<
 
 export async function listTransactions(
   user: UserContext,
-  q: { month?: string | undefined; type?: MoneyType | undefined; category?: MoneyCategory | undefined; limit?: number },
+  q: {
+    month?: string | undefined;
+    type?: MoneyType | undefined;
+    category?: MoneyCategory | undefined;
+    limit?: number;
+  },
 ): Promise<TransactionDoc[]> {
   const filter: Record<string, unknown> = { userId: user.id };
   if (q.month) {
@@ -124,7 +129,11 @@ export async function setBudget(user: UserContext, input: BudgetSet): Promise<Bu
   const key = { userId: user.id, category: data.category };
   if (data.monthlyLimit === null) await Budget.deleteOne(key);
   else
-    await Budget.updateOne(key, { $set: { monthlyLimit: round2(data.monthlyLimit) } }, { upsert: true });
+    await Budget.updateOne(
+      key,
+      { $set: { monthlyLimit: round2(data.monthlyLimit) } },
+      { upsert: true },
+    );
   return listBudgets(user);
 }
 

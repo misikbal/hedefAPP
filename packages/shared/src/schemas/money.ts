@@ -59,7 +59,9 @@ export const moneyAmountSchema = z
   .max(100_000_000, 'Tutar çok büyük')
   .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'En çok 2 ondalık');
 
-export const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Ay YYYY-AA biçiminde olmalı');
+export const monthSchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Ay YYYY-AA biçiminde olmalı');
 
 /* ---------- kayıtlar ---------- */
 
@@ -153,7 +155,12 @@ export const moneyMonthSummarySchema = z.object({
   previousExpense: z.number(),
   /** toplam harcama limiti */
   budget: z
-    .object({ limit: z.number(), spent: z.number(), left: z.number(), status: z.enum(BUDGET_STATUS) })
+    .object({
+      limit: z.number(),
+      spent: z.number(),
+      left: z.number(),
+      status: z.enum(BUDGET_STATUS),
+    })
     .nullable(),
   expenseByCategory: z.array(moneyCategoryTotalSchema),
   incomeByCategory: z.array(moneyCategoryTotalSchema),

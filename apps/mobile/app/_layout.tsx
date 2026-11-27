@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { queryClient } from '@/api/queryClient';
 import { FocusLifecycle } from '@/features/focus/FocusLifecycle';
+import { lockPortrait } from '@/features/focus/orientation';
 import { NotificationsLifecycle } from '@/notifications/NotificationsLifecycle';
 import { useAuthStore } from '@/store/authStore';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -68,6 +69,7 @@ export default function RootLayout() {
   const init = useAuthStore((s) => s.init);
 
   useEffect(() => {
+    lockPortrait();
     void init();
   }, [init]);
 

@@ -18,6 +18,8 @@ import type {
   InstanceStatus,
   JournalDay,
   JournalEntry,
+  JournalInsightRange,
+  JournalInsights,
   JournalPut,
   NotificationDto,
   McpStatus,
@@ -75,6 +77,7 @@ export const keys = {
   journalDay: (date: string) => ['journal', 'day', date] as const,
   journalMonth: (month: string) => ['journal', 'month', month] as const,
   journalRecent: (before: string, limit: number) => ['journal', 'recent', before, limit] as const,
+  journalInsights: (range: string, date: string) => ['journal', 'insights', range, date] as const,
   notifications: ['notifications'] as const,
   unread: ['notifications', 'unread'] as const,
   settings: ['settings'] as const,
@@ -361,6 +364,12 @@ export const useJournalRecent = (before: string, limit = 5) =>
   useQuery({
     queryKey: keys.journalRecent(before, limit),
     queryFn: () => api<JournalEntry[]>(`/journal/recent?before=${before}&limit=${limit}`),
+  });
+
+export const useJournalInsights = (range: JournalInsightRange, date: string) =>
+  useQuery({
+    queryKey: keys.journalInsights(range, date),
+    queryFn: () => api<JournalInsights>(`/journal/insights?range=${range}&date=${date}`),
   });
 
 export function useSaveJournal(date: string) {

@@ -1,12 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import {
   journalDateParamsSchema,
+  journalInsightsQuerySchema,
   journalMonthQuerySchema,
   journalRecentQuerySchema,
 } from '@takip/shared';
 import { parse } from '../../lib/validate.js';
 import { toJournalDto } from '../../lib/serialize.js';
-import { getJournalDay, journalMonth, journalRecent, putJournal } from '../../services/journal.js';
+import {
+  getJournalDay,
+  journalInsights,
+  journalMonth,
+  journalRecent,
+  putJournal,
+} from '../../services/journal.js';
 
 export async function journalRoutes(app: FastifyInstance): Promise<void> {
   app.get('/journal', async (req) => {
@@ -17,6 +24,10 @@ export async function journalRoutes(app: FastifyInstance): Promise<void> {
   app.get('/journal/recent', async (req) => {
     const { before, limit } = parse(journalRecentQuerySchema, req.query);
     return (await journalRecent(req.user, before, limit)).map(toJournalDto);
+  });
+  app.get('/journal/insights', async (req) => {
+    const { range, date } = parse(journalInsightsQuerySchema, req.query);
+    return journalInsights(req.user, range, date);
   });
   app.get('/journal/:date', async (req) => {
     const { date } = parse(journalDateParamsSchema, req.params);

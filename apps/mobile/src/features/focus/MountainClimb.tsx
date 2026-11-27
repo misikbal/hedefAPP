@@ -35,10 +35,10 @@ import { fonts } from '@/theme/typography';
  * periyotlar bu sürenin tam bölenleri olduğu için döngü dikişsizdir.
  */
 
-const VB_W = 320;
-const VB_H = 240;
-const LOOP_MS = 24_000;
-const TAU = Math.PI * 2;
+export const VB_W = 320;
+export const VB_H = 240;
+export const LOOP_MS = 24_000;
+export const TAU = Math.PI * 2;
 
 const AnimatedG = Animated.createAnimatedComponent(G);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -58,14 +58,14 @@ const F = [150, 200] as const;
 const DEPTH = 30;
 
 const LEVEL_MINUTES: readonly number[] = [25, 50, 90];
-const SUMMIT_X = 208;
+export const SUMMIT_X = 208;
 /** Seviye başına zirve yüksekliği (y, küçük = yüksek) */
-const SUMMIT_Y = [78, 50, 24] as const;
-const START = [92, 164] as const;
+export const SUMMIT_Y = [78, 50, 24] as const;
+export const START = [92, 164] as const;
 
 const pt = (p: readonly [number, number]) => `${p[0]},${p[1]}`;
 
-interface Trail {
+export interface Trail {
   /** düz dizi: x0,y0,x1,y1,... */
   pts: number[];
   /** her noktaya kadar birikmiş uzunluk */
@@ -107,10 +107,10 @@ function buildTrail(top: number): Trail {
   return { pts, cum, len: acc, d };
 }
 
-const TRAILS = SUMMIT_Y.map(buildTrail);
+export const TRAILS = SUMMIT_Y.map(buildTrail);
 
 /** Patika üzerinde p (0–1) oranındaki nokta; UI thread'de çalışır. */
-function trailAt(pts: number[], cum: number[], len: number, p: number): { x: number; y: number } {
+export function trailAt(pts: number[], cum: number[], len: number, p: number): { x: number; y: number } {
   'worklet';
   const target = len * Math.min(1, Math.max(0, p));
   const n = cum.length;
@@ -175,12 +175,12 @@ const TREES = (() => {
   return out.sort((a, b) => a.y - b.y);
 })();
 
-const STREAM_D = 'M134,147 C126,153 140,159 134,167 C129,174 117,177 120,189.6';
+export const STREAM_D = 'M134,147 C126,153 140,159 134,167 C129,174 117,177 120,189.6';
 
 // ---------------------------------------------------------------------------
 // Statik katmanlar
 
-const Defsets = memo(function Defsets({ isDark }: { isDark: boolean }) {
+export const Defsets = memo(function Defsets({ isDark }: { isDark: boolean }) {
   return (
     <Defs>
       <RadialGradient id="mc-sky" cx="50%" cy="35%" r="75%">
@@ -235,7 +235,7 @@ const Defsets = memo(function Defsets({ isDark }: { isDark: boolean }) {
 });
 
 /** Blok: gölge, yan kesitler, üst yüzey, sol tepe, tarlalar, dere, ağaçlar, pusula */
-const Terrain = memo(function Terrain({ isDark }: { isDark: boolean }) {
+export const Terrain = memo(function Terrain({ isDark }: { isDark: boolean }) {
   const lB: [number, number] = [L[0], L[1] + DEPTH];
   const fB: [number, number] = [F[0], F[1] + DEPTH];
   const rB: [number, number] = [R[0], R[1] + DEPTH];
@@ -309,7 +309,7 @@ function Rect0() {
   return <Polygon points={`0,0 ${VB_W},0 ${VB_W},${VB_H} 0,${VB_H}`} fill="url(#mc-sky)" />;
 }
 
-const ForestLayer = memo(function ForestLayer() {
+export const ForestLayer = memo(function ForestLayer() {
   return (
     <G>
       {/* dere (dağ eteğinin önünden akar) */}
@@ -360,7 +360,16 @@ function contourLines(top: number) {
 }
 
 /** Seviyeye bağlı katman: ana dağ, eş yükselti çizgileri, kesikli patika, iğneler */
-const LevelScene = memo(function LevelScene({ index, flag }: { index: number; flag: boolean }) {
+export const LevelScene = memo(function LevelScene({
+  index,
+  flag,
+  standby = false,
+}: {
+  index: number;
+  flag: boolean;
+  /** Yatay mod: patika çizgisi ve iğneler sahnede kameraya göre ölçeklenerek ayrıca çizilir */
+  standby?: boolean;
+}) {
   const shape = MAIN_SHAPES[index]!;
   const top = SUMMIT_Y[index]!;
   const trail = TRAILS[index]!;
@@ -381,6 +390,7 @@ const LevelScene = memo(function LevelScene({ index, flag }: { index: number; fl
         ))}
       </G>
       {/* kesikli tam patika */}
+      {standby ? null : (
       <Path
         d={trail.d}
         fill="none"
@@ -391,13 +401,14 @@ const LevelScene = memo(function LevelScene({ index, flag }: { index: number; fl
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      )}
       {/* zirve iğnesi (kırmızı); bayrak dikilince yerini bayrağa bırakır */}
-      {!flag ? <Pin x={SUMMIT_X} y={top + 1} color="#E5483B" /> : null}
+      {!flag && !standby ? <Pin x={SUMMIT_X} y={top + 1} color="#E5483B" /> : null}
     </G>
   );
 });
 
-function Pin({ x, y, color }: { x: number; y: number; color: string }) {
+export function Pin({ x, y, color }: { x: number; y: number; color: string }) {
   return (
     <G transform={`translate(${x},${y}) scale(0.8)`}>
       <Ellipse cx={0} cy={0} rx={4} ry={1.4} fill="#000" opacity={0.3} />
@@ -446,12 +457,12 @@ const CloudsB = memo(function CloudsB({ top }: { top: number }) {
 // ---------------------------------------------------------------------------
 // Animasyonlu parçalar
 
-const CONFETTI = Array.from({ length: 14 }, (_, i) => {
+export const CONFETTI = Array.from({ length: 14 }, (_, i) => {
   const a = -Math.PI / 2 + ((i / 13) - 0.5) * Math.PI * 1.4;
   return { a, s: 18 + ((i * 37) % 17) };
 });
 
-function confettiD(cx: number, cy: number, b: number, from: number, step: number) {
+export function confettiD(cx: number, cy: number, b: number, from: number, step: number) {
   'worklet';
   let d = '';
   for (let i = from; i < CONFETTI.length; i += step) {

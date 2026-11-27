@@ -312,14 +312,38 @@ const JOURNAL_NOTES: [number, string | null, string | null, string | null][] = [
   [4, 'İki odak seansı üst üste, hiç bölünmeden.', null, null],
 ];
 
+/** JOURNAL_NOTES ile aynı sırada: enerji ve etiketler */
+const JOURNAL_EXTRAS: [number, string[]][] = [
+  [4, ['spor', 'odak']],
+  [2, ['sosyal']],
+  [1, ['yorgunluk', 'spor']],
+  [3, ['kod', 'odak']],
+  [3, ['spor', 'dil']],
+  [1, ['iş', 'stres']],
+  [4, ['odak', 'kod']],
+];
+
 /** Son 30 günün günlük kayıtları (bugün hariç, birkaç gün boş). */
 async function seedJournal(ctx: { id: Types.ObjectId; timezone: string }): Promise<number> {
   const today = localDateOf(new Date(), ctx.timezone);
   const docs = [];
   for (let i = 1; i <= 30; i++) {
     if (i % 9 === 5) continue;
-    const [mood, wentWell, hard, tomorrowOne] = JOURNAL_NOTES[i % JOURNAL_NOTES.length]!;
-    docs.push({ userId: ctx.id, date: addDays(today, -i), mood, wentWell, hard, tomorrowOne });
+    const k = i % JOURNAL_NOTES.length;
+    const [mood, wentWell, hard, tomorrowOne] = JOURNAL_NOTES[k]!;
+    const [energy, tags] = JOURNAL_EXTRAS[k]!;
+    docs.push({
+      userId: ctx.id,
+      date: addDays(today, -i),
+      mood,
+      wentWell,
+      hard,
+      tomorrowOne,
+      energy,
+      tags,
+      summary: wentWell ?? hard,
+      source: i % 3 === 0 ? 'claude' : 'app',
+    });
   }
   await JournalEntry.insertMany(docs);
   return docs.length;

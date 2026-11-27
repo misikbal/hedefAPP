@@ -23,6 +23,9 @@ import {
   goalCreateSchema,
   goalUpdateSchema,
   isoDayOfWeek,
+  JOURNAL_INSIGHT_RANGES,
+  JOURNAL_SUMMARY_MAX,
+  JOURNAL_TAGS,
   journalPutSchema,
   localDateSchema,
   objectIdSchema,
@@ -50,6 +53,7 @@ import {
   yearSummary,
 } from '../services/money.js';
 import { goalSummaries, statsOverview } from '../services/stats.js';
+import { journalInsights } from '../services/journal.js';
 import { getSettings, type UserContext } from '../services/users.js';
 import { getToday, getWeek } from '../services/views.js';
 import {
@@ -391,8 +395,62 @@ export function createMcpServer(user: UserContext): McpServer {
             wentWell: e.wentWell ?? null,
             hard: e.hard ?? null,
             tomorrowOne: e.tomorrowOne ?? null,
+            energy: e.energy ?? null,
+            tags: e.tags ?? [],
+            summary: e.summary ?? null,
+            source: e.source ?? 'app',
+            daySnapshot: e.daySnapshot
+              ? {
+                  blocksPlanned: e.daySnapshot.blocksPlanned,
+                  blocksDone: e.daySnapshot.blocksDone,
+                  blocksMissed: e.daySnapshot.blocksMissed,
+                  missedCategories: e.daySnapshot.missedCategories,
+                  sportDone: e.daySnapshot.sportDone ?? null,
+                  goalProgress: e.daySnapshot.goalProgress,
+                }
+              : null,
           })),
         });
+      },
+    ),
+  );
+
+  server.registerTool(
+    'get_journal_insights',
+    {
+      title: 'Günlük analizi',
+      description: [
+        'Bir hafta (pazartesi–pazar) ya da ay için sunucunun hesapladığı günlük örüntülerini döner: ruh hâli ve enerji ortalaması, eğilim (ilk yarı / ikinci yarı), blok tamamlama oranı, spor yapılan/yapılmayan günlerde ruh hâli, enerjiye göre tamamlama, sık etiketler, en çok kaçan kategori ve saat dilimi, seriler, en düşük gün, kural tabanlı kısa bulgular (findings).',
+        'Yorum kuralları: en çok 4 cümle ve en çok 2 öneri. Öneriler somut olsun (ör. "Almanca 15:00–17:00 arasında 3 kez kaçmış, sabah 10:00\'a almayı dene"). Yalnızca dönen sayılara dayan, veride olmayan bir neden uydurma. null alanlar hakkında yorum yapma (az veri demektir).',
+        'Tanı koyma, psikolojik etiket kullanma. lowMoodStreak 3 ya da daha fazlaysa yargılamadan nasıl olduğunu sor, gerekirse güvendiği biriyle konuşmayı öner; o dönemde cezaları öne çıkarma.',
+        'Öneri programı değiştirmeyi gerektiriyorsa kullanıcı isterse update_block / add_block çağır (onay akışından geçer).',
+        'Yalnızca kullanıcı "günlüğü okuma" iznini açtıysa çalışır. Kategoriler: project=Proje, sport=Spor, language=Dil, reading=Okuma, other=Diğer.',
+      ].join(' '),
+      inputSchema: {
+        range: z.enum(JOURNAL_INSIGHT_RANGES).optional().describe('week (varsayılan) ya da month'),
+        date: localDateSchema
+          .optional()
+          .describe('Bu günü içeren hafta/ay; varsayılan günlüğün bugünü'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    run(
+      'get_journal_insights',
+      async ({
+        range,
+        date,
+      }: {
+        range?: 'week' | 'month' | undefined;
+        date?: string | undefined;
+      }) => {
+        const perms = mcpPermissionsOf(await getSettings(user.id));
+        if (!perms.journalRead) {
+          return fail(
+            'Günlüğü okuma izni kapalı. Kullanıcı uygulamada Ayarlar → Claude bağlantısı → İzinler bölümünden "Günlüğü okuma"yı açabilir.',
+          );
+        }
+        const { days: _days, ...insights } = await journalInsights(user, range ?? 'week', date);
+        return ok(`${insights.from} – ${insights.to}: ${insights.entries} günlük kaydı.`, insights);
       },
     ),
   );
@@ -560,7 +618,13 @@ export function createMcpServer(user: UserContext): McpServer {
       const label = MONEY_CATEGORY_LABELS[tx.category];
       return ok(
         `${tx.type === 'income' ? 'Gelir' : 'Harcama'} eklendi: ${formatMoney(tx.amount)} (${label}, ${tx.date}).`,
-        { id: tx.id as string, type: tx.type, amount: tx.amount, category: tx.category, date: tx.date },
+        {
+          id: tx.id as string,
+          type: tx.type,
+          amount: tx.amount,
+          category: tx.category,
+          date: tx.date,
+        },
       );
     }),
   );
@@ -572,7 +636,11 @@ export function createMcpServer(user: UserContext): McpServer {
       description:
         'Gelir/harcama kayıtlarını yeniden eskiye döner. month (YYYY-AA), type ve category ile süzülür; varsayılan bu ay, en çok 50 kayıt.',
       inputSchema: {
-        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe('YYYY-AA, varsayılan bu ay'),
+        month: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+          .optional()
+          .describe('YYYY-AA, varsayılan bu ay'),
         type: z.enum(MONEY_TYPES).optional(),
         category: z.enum(MONEY_CATEGORIES).optional(),
         limit: z.number().int().min(1).max(50).optional(),
@@ -607,40 +675,59 @@ export function createMcpServer(user: UserContext): McpServer {
       description:
         'Bir ayın gelir, harcama ve net (gelir − gider) toplamı, kategori dağılımı, bütçe limitleri ve önceki aya göre fark. Verilmezse bu ay. year verilirse (YYYY) 12 aylık yıllık özet döner.',
       inputSchema: {
-        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe('YYYY-AA'),
+        month: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+          .optional()
+          .describe('YYYY-AA'),
         year: z.number().int().min(2000).max(2100).optional().describe('Verilirse yıllık özet'),
       },
       annotations: { readOnlyHint: true },
     },
-    run('get_money_summary', async (a: { month?: string | undefined; year?: number | undefined }) => {
-      if (a.year) {
-        const y = await yearSummary(user, a.year);
-        return ok(`${y.year}: gelir ${formatMoney(y.income)}, harcama ${formatMoney(y.expense)}, net ${formatMoney(y.net)}.`, {
-          months: y.months,
-          expenseByCategory: y.expenseByCategory.map((c) => ({ category: c.category, total: c.total })),
-          incomeByCategory: y.incomeByCategory.map((c) => ({ category: c.category, total: c.total })),
-        });
-      }
-      const m = await monthSummary(user, a.month ?? currentMonth(user));
-      return ok(
-        `${m.month}: gelir ${formatMoney(m.income)}, harcama ${formatMoney(m.expense)}, net ${formatMoney(m.net)}.`,
-        {
-          month: m.month,
-          income: m.income,
-          expense: m.expense,
-          net: m.net,
-          previousExpense: m.previousExpense,
-          budget: m.budget,
-          expenseByCategory: m.expenseByCategory.map((c) => ({
-            category: c.category,
-            total: c.total,
-            limit: c.limit,
-            status: c.status,
-          })),
-          incomeByCategory: m.incomeByCategory.map((c) => ({ category: c.category, total: c.total })),
-        },
-      );
-    }),
+    run(
+      'get_money_summary',
+      async (a: { month?: string | undefined; year?: number | undefined }) => {
+        if (a.year) {
+          const y = await yearSummary(user, a.year);
+          return ok(
+            `${y.year}: gelir ${formatMoney(y.income)}, harcama ${formatMoney(y.expense)}, net ${formatMoney(y.net)}.`,
+            {
+              months: y.months,
+              expenseByCategory: y.expenseByCategory.map((c) => ({
+                category: c.category,
+                total: c.total,
+              })),
+              incomeByCategory: y.incomeByCategory.map((c) => ({
+                category: c.category,
+                total: c.total,
+              })),
+            },
+          );
+        }
+        const m = await monthSummary(user, a.month ?? currentMonth(user));
+        return ok(
+          `${m.month}: gelir ${formatMoney(m.income)}, harcama ${formatMoney(m.expense)}, net ${formatMoney(m.net)}.`,
+          {
+            month: m.month,
+            income: m.income,
+            expense: m.expense,
+            net: m.net,
+            previousExpense: m.previousExpense,
+            budget: m.budget,
+            expenseByCategory: m.expenseByCategory.map((c) => ({
+              category: c.category,
+              total: c.total,
+              limit: c.limit,
+              status: c.status,
+            })),
+            incomeByCategory: m.incomeByCategory.map((c) => ({
+              category: c.category,
+              total: c.total,
+            })),
+          },
+        );
+      },
+    ),
   );
 
   server.registerTool(
@@ -654,16 +741,25 @@ export function createMcpServer(user: UserContext): McpServer {
         monthlyLimit: moneyAmountSchema.nullable().describe('TL; null = limiti kaldır'),
       },
     },
-    run('set_budget', async (a: { category?: (typeof EXPENSE_CATEGORIES)[number] | undefined; monthlyLimit: number | null }) => {
-      const budgets = await setBudget(user, { category: a.category ?? null, monthlyLimit: a.monthlyLimit });
-      const scope = a.category ? MONEY_CATEGORY_LABELS[a.category] : 'Toplam harcama';
-      return ok(
-        a.monthlyLimit === null
-          ? `${scope} limiti kaldırıldı.`
-          : `${scope} aylık limiti ${formatMoney(a.monthlyLimit)} oldu.`,
-        { budgets },
-      );
-    }),
+    run(
+      'set_budget',
+      async (a: {
+        category?: (typeof EXPENSE_CATEGORIES)[number] | undefined;
+        monthlyLimit: number | null;
+      }) => {
+        const budgets = await setBudget(user, {
+          category: a.category ?? null,
+          monthlyLimit: a.monthlyLimit,
+        });
+        const scope = a.category ? MONEY_CATEGORY_LABELS[a.category] : 'Toplam harcama';
+        return ok(
+          a.monthlyLimit === null
+            ? `${scope} limiti kaldırıldı.`
+            : `${scope} aylık limiti ${formatMoney(a.monthlyLimit)} oldu.`,
+          { budgets },
+        );
+      },
+    ),
   );
 
   /* ---------- hedef ve ilerleme ---------- */
@@ -848,14 +944,32 @@ export function createMcpServer(user: UserContext): McpServer {
     'write_journal',
     {
       title: 'Günlük yaz',
-      description:
-        "Günlük kaydı yazar ya da günceller (yalnızca verilen alanlar değişir). mood: 0 çok kötü … 4 çok iyi; ilk kayıtta zorunlu. Tarih verilmezse günlüğün bugünü (gece 04:00'e kadar önceki gün).",
+      description: [
+        "Günlük kaydı yazar ya da günceller (yalnızca verilen alanlar değişir). Kullanıcı gününü sohbette anlatınca alanları anlatımdan doldur. Tarih verilmezse günlüğün bugünü (gece 04:00'e kadar önceki gün).",
+        "mood: ruh hâli 0 çok kötü … 4 çok iyi (ilk kayıtta zorunlu); energy: enerji 0 çok düşük … 4 çok yüksek, ruh hâlinden ayrıdır. Kullanıcı açıkça söylemediyse mood/energy tahmin etme: sor ya da energy'yi boş bırak.",
+        'summary: tek cümle, kullanıcının kendi ifadelerine yakın. tomorrowOne: kullanıcı söylemediyse doldurma.',
+        `tags: en çok 5, şu listeden seç: ${JOURNAL_TAGS.join(', ')}. Listede olmayan etiket "other:" önekiyle saklanır.`,
+        'rawNote: kullanıcının kendi anlattığı, kısaltılmış (kullanıcı ayarlardan kapattıysa saklanmaz).',
+        'Yazmadan önce sohbette doldurduğun alanların kısa özetini gösterip kullanıcının onayını al. Gün durumu (bloklar, spor, hedefler) sunucu tarafından eklenir, gönderme.',
+      ].join(' '),
       inputSchema: {
         date: localDateSchema.optional(),
         mood: z.number().int().min(0).max(4).optional(),
+        energy: z.number().int().min(0).max(4).optional().describe('Enerji 0–4'),
         wentWell: z.string().max(1000).optional().describe('İyi giden'),
         hard: z.string().max(1000).optional().describe('Zorlayan'),
         tomorrowOne: z.string().max(1000).optional().describe('Yarın için tek şey'),
+        tags: z.array(z.string().max(60)).max(5).optional().describe('Etiketler, en çok 5'),
+        summary: z
+          .string()
+          .max(JOURNAL_SUMMARY_MAX)
+          .optional()
+          .describe('Günün tek cümlelik özeti'),
+        rawNote: z
+          .string()
+          .max(1000)
+          .optional()
+          .describe('Kullanıcının kendi cümlesi, kısaltılmış'),
         userMessage,
       },
     },
@@ -866,12 +980,15 @@ export function createMcpServer(user: UserContext): McpServer {
       if (mood === undefined) {
         throw new AppError(400, 'VALIDATION_ERROR', 'İlk kayıtta ruh hâli (mood 0–4) gerekli');
       }
-      const input = {
+      const input: Record<string, unknown> = {
         mood,
         wentWell: (a.wentWell as string | undefined) ?? existing?.wentWell ?? null,
         hard: (a.hard as string | undefined) ?? existing?.hard ?? null,
         tomorrowOne: (a.tomorrowOne as string | undefined) ?? existing?.tomorrowOne ?? null,
       };
+      for (const k of ['energy', 'tags', 'summary', 'rawNote'] as const) {
+        if (a[k] !== undefined) input[k] = a[k];
+      }
       journalPutSchema.parse(input);
       return write('write_journal', { date, input }, a.userMessage);
     }),

@@ -17,7 +17,11 @@ import {
 describe('para takibi', () => {
   let app: FastifyInstance;
   let token: string;
-  const call = (method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, payload?: object) =>
+  const call = (
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    url: string,
+    payload?: object,
+  ) =>
     app.inject({
       method,
       url: `/api/v1${url}`,
@@ -25,7 +29,12 @@ describe('para takibi', () => {
       ...(payload ? { payload } : {}),
     });
   const spend = (amount: number, category = 'grocery', date?: string) =>
-    call('POST', '/money/transactions', { type: 'expense', amount, category, ...(date ? { date } : {}) });
+    call('POST', '/money/transactions', {
+      type: 'expense',
+      amount,
+      category,
+      ...(date ? { date } : {}),
+    });
 
   beforeAll(async () => {
     await startDb();
@@ -66,7 +75,12 @@ describe('para takibi', () => {
   });
 
   it('aylık özet: gelir, harcama, net, kategori, günlük, önceki ay', async () => {
-    await call('POST', '/money/transactions', { type: 'income', amount: 10000, category: 'salary', date: '2026-11-01' });
+    await call('POST', '/money/transactions', {
+      type: 'income',
+      amount: 10000,
+      category: 'salary',
+      date: '2026-11-01',
+    });
     await spend(250, 'grocery', '2026-11-10');
     await spend(150.5, 'food', '2026-11-10');
     await spend(400, 'grocery', '2026-10-15');
@@ -90,7 +104,12 @@ describe('para takibi', () => {
   });
 
   it('yıllık özet: 12 ay ve toplamlar', async () => {
-    await call('POST', '/money/transactions', { type: 'income', amount: 5000, category: 'salary', date: '2026-03-05' });
+    await call('POST', '/money/transactions', {
+      type: 'income',
+      amount: 5000,
+      category: 'salary',
+      date: '2026-03-05',
+    });
     await spend(1000, 'rent', '2026-03-06');
     await spend(200, 'fun', '2026-11-02');
     const y = moneyYearSummarySchema.parse((await call('GET', '/money/year?year=2026')).json());
@@ -103,7 +122,9 @@ describe('para takibi', () => {
     const id = (await spend(100)).json().id as string;
     const u = await call('PATCH', `/money/transactions/${id}`, { amount: 120, note: 'Migros' });
     expect(u.json()).toMatchObject({ amount: 120, note: 'Migros' });
-    expect((await call('PATCH', `/money/transactions/${id}`, { category: 'salary' })).statusCode).toBe(400);
+    expect(
+      (await call('PATCH', `/money/transactions/${id}`, { category: 'salary' })).statusCode,
+    ).toBe(400);
     expect((await call('DELETE', `/money/transactions/${id}`)).statusCode).toBe(204);
     expect((await call('DELETE', `/money/transactions/${id}`)).statusCode).toBe(404);
     expect(await Transaction.countDocuments()).toBe(0);
@@ -124,7 +145,9 @@ describe('para takibi', () => {
     expect(keys).toContain('budget:2026-11:total:warn');
     expect(keys).toContain('budget:2026-11:total:over');
 
-    const s = moneyMonthSummarySchema.parse((await call('GET', '/money/summary?month=2026-11')).json());
+    const s = moneyMonthSummarySchema.parse(
+      (await call('GET', '/money/summary?month=2026-11')).json(),
+    );
     expect(s.budget).toMatchObject({ limit: 1000, spent: 1150, left: -150, status: 'over' });
 
     const removed = await call('PUT', '/money/budgets', { category: null, monthlyLimit: null });

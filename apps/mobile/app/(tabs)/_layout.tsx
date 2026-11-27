@@ -11,6 +11,7 @@ import {
   WeekIcon,
 } from '@/components/icons';
 import { useTheme } from '@/theme/ThemeProvider';
+import { useStandbyStore } from '@/store/standbyStore';
 import { fonts } from '@/theme/typography';
 
 const TABS: { name: string; title: string; Icon: ComponentType<{ color: string }> }[] = [
@@ -26,6 +27,7 @@ const TABS: { name: string; title: string; Icon: ComponentType<{ color: string }
 export default function TabsLayout() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
+  const standby = useStandbyStore((s) => s.active);
   return (
     <Tabs
       screenOptions={{
@@ -37,6 +39,7 @@ export default function TabsLayout() {
           borderTopWidth: 1,
           height: 68 + insets.bottom,
           paddingTop: 8,
+          ...(standby ? { display: 'none' as const } : null),
         },
         tabBarActiveTintColor: c.accTx,
         tabBarInactiveTintColor: c.mut,

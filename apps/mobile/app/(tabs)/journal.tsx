@@ -6,6 +6,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { z } from 'zod';
 import {
   APP_TIMEZONE,
+  JOURNAL_SUMMARY_MAX,
+  JOURNAL_TAG_MAX,
   JOURNAL_TEXT_MAX,
   addDays,
   dayStatChips,
@@ -21,7 +23,10 @@ import { CalendarIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { ErrorCard, Loading, errorMessage } from '@/components/StateViews';
 import { Txt } from '@/components/Txt';
+import { EnergyPicker } from '@/features/journal/EnergyPicker';
 import { MoodDot, MoodPicker } from '@/features/journal/MoodPicker';
+import { TagPicker } from '@/features/journal/TagPicker';
+import { WeekInsights } from '@/features/journal/WeekInsights';
 import { dayMonthLabel, nowTimeLocal, todayEyebrow, todayLocal } from '@/lib/date';
 import { useNow } from '@/lib/useNow';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -34,8 +39,51 @@ const formSchema = z.object({
   wentWell: text,
   hard: text,
   tomorrowOne: text,
+  energy: z.number().int().min(0).max(4).nullable(),
+  tags: z.array(z.string()).max(JOURNAL_TAG_MAX),
+  summary: z.string().max(JOURNAL_SUMMARY_MAX, `En çok ${JOURNAL_SUMMARY_MAX} karakter`),
 });
 type FormValues = z.input<typeof formSchema>;
+
+/** "Claude ile yazıldı" / "Elle" rozeti; Claude'un sakladığı kullanıcı cümlesi açılıp okunabilir. */
+function SourceBadge({ source, rawNote }: { source: 'app' | 'claude'; rawNote: string | null }) {
+  const { c } = useTheme();
+  const [open, setOpen] = useState(false);
+  const claude = source === 'claude';
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={[styles.chips, { alignItems: 'center' }]}>
+        <View
+          style={[
+            styles.chip,
+            { backgroundColor: claude ? c.s2 : c.s1, borderColor: claude ? c.acc : c.line },
+          ]}
+        >
+          <Txt style={{ fontFamily: fonts.mono, fontSize: 11 }} color={claude ? 'accTx' : 'mut'}>
+            {claude ? 'Claude ile yazıldı' : 'Elle'}
+          </Txt>
+        </View>
+        {rawNote ? (
+          <Pressable accessibilityRole="button" onPress={() => setOpen((o) => !o)} hitSlop={8}>
+            <Txt style={{ fontSize: 13 }} color="mut">
+              {open ? 'Notunu gizle' : 'Kendi notunu gör'}
+            </Txt>
+          </Pressable>
+        ) : null}
+      </View>
+      {open && rawNote ? (
+        <Txt style={{ fontSize: 14, lineHeight: 20, fontStyle: 'italic' }} color="tx2">
+          {rawNote}
+        </Txt>
+      ) : null}
+      {claude ? (
+        <Txt style={{ fontSize: 12 }} color="mut">
+          Yanlış anlaşılan bir yer varsa aşağıda düzeltip kaydedebilirsin.
+        </Txt>
+      ) : null}
+    </View>
+  );
+}
 
 function JournalForm({ day }: { day: JournalDay }) {
   const save = useSaveJournal(day.date);
@@ -48,6 +96,9 @@ function JournalForm({ day }: { day: JournalDay }) {
       wentWell: e?.wentWell ?? '',
       hard: e?.hard ?? '',
       tomorrowOne: e?.tomorrowOne ?? '',
+      energy: e?.energy ?? null,
+      tags: e?.tags ?? [],
+      summary: e?.summary ?? '',
     },
   });
 
@@ -57,10 +108,11 @@ function JournalForm({ day }: { day: JournalDay }) {
   });
 
   const area = (
-    name: 'wentWell' | 'hard' | 'tomorrowOne',
+    name: 'wentWell' | 'hard' | 'tomorrowOne' | 'summary',
     label: string,
     rows: number,
     placeholder?: string,
+    max = JOURNAL_TEXT_MAX,
   ) => (
     <Controller
       control={control}
@@ -77,7 +129,7 @@ function JournalForm({ day }: { day: JournalDay }) {
             multiline={rows > 1}
             textAlignVertical="top"
             placeholder={placeholder}
-            maxLength={JOURNAL_TEXT_MAX}
+            maxLength={max}
             invalid={!!fieldState.error}
             style={rows > 1 ? { height: rows * 21 + 26, paddingTop: 12, lineHeight: 21 } : null}
           />
@@ -88,6 +140,7 @@ function JournalForm({ day }: { day: JournalDay }) {
 
   return (
     <>
+      {e ? <SourceBadge source={e.source} rawNote={e.rawNote} /> : null}
       <View style={{ gap: 8 }}>
         <Txt variant="caption" color="mut">
           Gün nasıl geçti?
@@ -113,9 +166,52 @@ function JournalForm({ day }: { day: JournalDay }) {
           )}
         />
       </View>
+      <View style={{ gap: 4 }}>
+        <Txt variant="caption" color="mut">
+          Enerjin nasıldı?
+        </Txt>
+        <Controller
+          control={control}
+          name="energy"
+          render={({ field }) => (
+            <EnergyPicker
+              value={field.value}
+              onChange={(v) => {
+                setSaved(false);
+                field.onChange(v);
+              }}
+            />
+          )}
+        />
+      </View>
       {area('wentWell', 'Ne iyi gitti?', 3)}
       {area('hard', 'Ne zorladı?', 2, 'Kısa yaz, yeter.')}
       {area('tomorrowOne', 'Yarın için tek bir şey', 1, 'Örn. kitaba erken başla')}
+      {area(
+        'summary',
+        'Tek cümleyle gün',
+        1,
+        'Örn. kod tamam, öğleden sonra yoruldum',
+        JOURNAL_SUMMARY_MAX,
+      )}
+      <View style={{ gap: 8 }}>
+        <Txt variant="caption" color="mut">
+          Etiketler (en çok {JOURNAL_TAG_MAX})
+        </Txt>
+        <Controller
+          control={control}
+          name="tags"
+          render={({ field }) => (
+            <TagPicker
+              value={field.value}
+              onChange={(t) => {
+                setSaved(false);
+                field.onChange(t);
+              }}
+            />
+          )}
+        />
+      </View>
       <Button
         label={saved && !formState.isDirty ? 'Kaydedildi' : 'Kaydet'}
         onPress={() => void submit()}
@@ -221,6 +317,8 @@ export default function JournalScreen() {
         <JournalForm key={`${date}:${day.data.entry?.updatedAt ?? 'new'}`} day={day.data} />
       )}
 
+      <WeekInsights date={date} />
+
       <View style={[styles.past, { borderTopColor: c.line }]}>
         <Txt style={{ fontFamily: fonts.display, fontSize: 18 }}>Önceki günler</Txt>
         {recent.data?.length === 0 ? (
@@ -243,7 +341,7 @@ export default function JournalScreen() {
                 {todayEyebrow(e.date)}
               </Txt>
               <Txt style={{ fontSize: 14, lineHeight: 20 }} color="tx2" numberOfLines={1}>
-                {journalPreview(e) || '—'}
+                {e.summary || journalPreview(e) || '—'}
               </Txt>
             </View>
           </Pressable>

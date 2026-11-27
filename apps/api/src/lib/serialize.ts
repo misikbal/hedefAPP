@@ -168,6 +168,23 @@ export function toJournalDto(e: JournalEntryDoc): JournalEntryDto {
     wentWell: e.wentWell ?? null,
     hard: e.hard ?? null,
     tomorrowOne: e.tomorrowOne ?? null,
+    energy: e.energy ?? null,
+    tags: [...(e.tags ?? [])],
+    summary: e.summary ?? null,
+    rawNote: e.rawNote ?? null,
+    source: e.source === 'claude' ? 'claude' : 'app',
+    daySnapshot: e.daySnapshot
+      ? {
+          blocksPlanned: e.daySnapshot.blocksPlanned ?? 0,
+          blocksDone: e.daySnapshot.blocksDone ?? 0,
+          blocksMissed: e.daySnapshot.blocksMissed ?? 0,
+          missedCategories: [...(e.daySnapshot.missedCategories ?? [])],
+          missedStarts: [...(e.daySnapshot.missedStarts ?? [])],
+          sportDone: e.daySnapshot.sportDone ?? null,
+          goalProgress: (e.daySnapshot.goalProgress ?? {}) as Record<string, number>,
+          takenAt: (e.daySnapshot.takenAt ?? e.updatedAt).toISOString(),
+        }
+      : null,
     updatedAt: e.updatedAt.toISOString(),
   };
 }
@@ -209,5 +226,6 @@ export function mcpPermissionsOf(s: SettingsDoc): McpPermissions {
     blockDelete: p?.blockDelete === 'auto' ? 'auto' : 'approve',
     penaltyRuleWrite: p?.penaltyRuleWrite === 'auto' ? 'auto' : 'approve',
     journalRead: p?.journalRead === true,
+    journalRawNote: p?.journalRawNote !== false,
   };
 }

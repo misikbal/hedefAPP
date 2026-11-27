@@ -22,7 +22,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   owner: 'kodmis',
   scheme: 'takip',
   version: '0.1.0',
-  orientation: 'portrait',
+  // Dikey kilidi kodda (features/focus/orientation.ts); yalnızca Odak sekmesi yatay masa saatine döner.
+  orientation: 'default',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
   backgroundColor: '#0E1116',

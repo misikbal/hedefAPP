@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { keys } from '@/api/hooks';
 import { queryClient } from '@/api/queryClient';
 import { updateFocusPanel } from '@/notifications/focusPanel';
@@ -27,7 +28,19 @@ async function restore() {
   }
 }
 
+const KEEP_AWAKE_TAG = 'focus-session';
+
 export function FocusLifecycle() {
+  // Sayaç çalışırken ekran kararmaz (her yönde). Mola ve duraklatmada normal uyku süresi geçerli.
+  const running = useFocusStore((s) => s.session?.status === 'running');
+  useEffect(() => {
+    if (!running) return;
+    void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
+    return () => {
+      void deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
+    };
+  }, [running]);
+
   useEffect(() => {
     let cancelled = false;
     const run = () => {

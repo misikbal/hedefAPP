@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import {
   FOCUS_MINUTES,
   focusElapsedMs,
@@ -22,6 +22,8 @@ import { errorMessage } from '@/components/StateViews';
 import { Txt } from '@/components/Txt';
 import { GuardStatus } from '@/features/focus/GuardStatus';
 import { MountainClimb } from '@/features/focus/MountainClimb';
+import { lockPortrait, unlockOrientation } from '@/features/focus/orientation';
+import { StandByView } from '@/features/focus/StandByView';
 import { WeekPeaks } from '@/features/focus/WeekPeaks';
 import {
   abandonFocus,
@@ -35,6 +37,7 @@ import {
 import { todayLocal } from '@/lib/date';
 import { useNow } from '@/lib/useNow';
 import { focusNow, setFocus, useFocusStore } from '@/store/focusStore';
+import { setStandbyActive } from '@/store/standbyStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { HIT } from '@/theme/tokens';
 import { fonts } from '@/theme/typography';
@@ -70,6 +73,20 @@ export default function FocusScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [customLabel, setCustomLabel] = useState(false);
+
+  // Yatay masa saati: yalnızca bu sekme açıkken ekranın dönmesine izin verilir.
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+  useFocusEffect(
+    useCallback(() => {
+      unlockOrientation();
+      return () => lockPortrait();
+    }, []),
+  );
+  useEffect(() => {
+    setStandbyActive(landscape);
+    return () => setStandbyActive(false);
+  }, [landscape]);
 
   // Süre dolunca seans otomatik biter (ekran açıkken).
   useEffect(() => {
@@ -147,6 +164,25 @@ export default function FocusScreen() {
     styles.chip,
     { backgroundColor: on ? c.s2 : c.s1, borderColor: on ? c.tx : c.line },
   ];
+
+  if (landscape) {
+    return (
+      <StandByView
+        now={now}
+        session={session}
+        planned={planned}
+        progress={progress}
+        remainingMs={remaining}
+        summit={summit}
+        label={session?.label ?? labelPick}
+        stateText={stateLabel(session, summit)}
+        mainLabel={mainLabel}
+        busy={busy}
+        error={error}
+        onToggle={() => void toggle()}
+      />
+    );
+  }
 
   return (
     <Screen

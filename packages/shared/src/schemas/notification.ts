@@ -77,6 +77,7 @@ export const settingsPatchSchema = z
         blockDelete: z.enum(MCP_PERMISSION_MODES),
         penaltyRuleWrite: z.enum(MCP_PERMISSION_MODES),
         journalRead: z.boolean(),
+        journalRawNote: z.boolean(),
       })
       .partial()
       .strict(),

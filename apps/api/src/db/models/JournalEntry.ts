@@ -10,6 +10,33 @@ const journalEntrySchema = new Schema(
     wentWell: { type: String, default: null },
     hard: { type: String, default: null },
     tomorrowOne: { type: String, default: null },
+    /** 0 … 4, ruh hâlinden ayrı */
+    energy: { type: Number, default: null, min: 0, max: 4 },
+    /** Küçük harf, en çok 5; öneri listesi dışındakiler `other:` önekli */
+    tags: { type: [String], default: [] },
+    /** Tek cümle özet */
+    summary: { type: String, default: null },
+    /** Kullanıcının kendi cümlesi (Claude'dan; ayarla kapatılabilir) */
+    rawNote: { type: String, default: null },
+    /** Kaydı ilk kim yazdı */
+    source: { type: String, enum: ['app', 'claude'], default: 'app' },
+    /** Kayıt anında dondurulan gün durumu (sunucu doldurur) */
+    daySnapshot: {
+      type: new Schema(
+        {
+          blocksPlanned: Number,
+          blocksDone: Number,
+          blocksMissed: Number,
+          missedCategories: [String],
+          missedStarts: [String],
+          sportDone: { type: Boolean, default: null },
+          goalProgress: { type: Schema.Types.Mixed, default: {} },
+          takenAt: Date,
+        },
+        { _id: false, minimize: false },
+      ),
+      default: null,
+    },
     createdAt: { type: Date, default: () => clock.now() },
     updatedAt: { type: Date, default: () => clock.now() },
   },

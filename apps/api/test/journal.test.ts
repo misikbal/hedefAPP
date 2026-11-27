@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { journalDaySchema, journalEntrySchema } from '@takip/shared';
+import { journalDaySchema, journalEntrySchema, journalInsightsSchema } from '@takip/shared';
 import { BlockInstance, JournalEntry, Penalty, ProgressLog } from '../src/db/models/index.js';
 import { createBlock } from '../src/services/blocks.js';
 import { createGoal } from '../src/services/goals.js';
@@ -147,5 +147,129 @@ describe('günlük', () => {
     const day = journalDaySchema.parse((await call('GET', '/journal/2026-11-24')).json());
     expect(day.entry).toBeNull();
     expect(day.stats.focusMinutes).toBe(50);
+  });
+
+  it('yeni alanlar: gönderilmeyen korunur, etiketler sadeleşir, kaynak app', async () => {
+    const a = await call('PUT', '/journal/2026-11-24', {
+      mood: 3,
+      energy: 2,
+      tags: ['Kod', 'bahçe', 'kod'],
+      summary: ' Kod tamam. ',
+    });
+    expect(a.statusCode).toBe(200);
+    expect(journalEntrySchema.parse(a.json())).toMatchObject({
+      energy: 2,
+      tags: ['kod', 'other:bahçe'],
+      summary: 'Kod tamam.',
+      source: 'app',
+    });
+    // eski istemci: yalnız dört alan → yeni alanlar kalır
+    const b = await call('PUT', '/journal/2026-11-24', { mood: 1 });
+    expect(b.json()).toMatchObject({ mood: 1, energy: 2, tags: ['kod', 'other:bahçe'] });
+    const c = await call('PUT', '/journal/2026-11-24', { mood: 1, energy: null, tags: [] });
+    expect(c.json()).toMatchObject({ energy: null, tags: [] });
+    expect((await call('PUT', '/journal/2026-11-24', { mood: 1, energy: 5 })).statusCode).toBe(400);
+  });
+
+  async function sportAndLanguageWeek() {
+    setNow('2026-11-23T03:00:00Z'); // Pzt 06:00
+    await createBlock(user, {
+      title: 'Bisiklet',
+      category: 'sport',
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      startTime: '07:00',
+      endTime: '08:00',
+    });
+    await createBlock(user, {
+      title: 'Almanca',
+      category: 'language',
+      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+      startTime: '15:00',
+      endTime: '16:00',
+    });
+    await ensureWeek(user.id, '2026-11-23', user.timezone);
+  }
+
+  it('daySnapshot: kayıt anında blok durumu ve hedef ilerlemesi', async () => {
+    await sportAndLanguageWeek();
+    const bike = await createGoal(user, {
+      name: 'Bisiklet',
+      target: 150,
+      unit: 'km',
+      period: 'weekly',
+      startDate: '2026-11-01',
+    });
+    await ProgressLog.create({ userId: user.id, goalId: bike._id, amount: 25, date: '2026-11-24' });
+    const inst = await BlockInstance.find({ date: '2026-11-24' }).sort({ startAt: 1 });
+    await BlockInstance.updateOne({ _id: inst[0]!._id }, { status: 'done' });
+
+    setNow('2026-11-24T20:00:00Z'); // Salı 23:00; Almanca planned ama 30 dk geçti → kaçmış
+    const entry = journalEntrySchema.parse(
+      (await call('PUT', '/journal/2026-11-24', { mood: 3 })).json(),
+    );
+    expect(entry.daySnapshot).toMatchObject({
+      blocksPlanned: 2,
+      blocksDone: 1,
+      blocksMissed: 1,
+      missedCategories: ['language'],
+      missedStarts: ['15:00'],
+      sportDone: true,
+      goalProgress: { Bisiklet: 25 },
+    });
+  });
+
+  it('insights: hafta; gün içinde alınan görüntü gün bitince kesinleşir', async () => {
+    await sportAndLanguageWeek();
+    const days = [
+      '2026-11-23',
+      '2026-11-24',
+      '2026-11-25',
+      '2026-11-26',
+      '2026-11-27',
+      '2026-11-28',
+    ];
+    // Spor ilk üç gün yapıldı, sonra kaçtı; Almanca hep kaçtı.
+    for (const [i, date] of days.entries()) {
+      const sport = await BlockInstance.findOne({ date }).sort({ startAt: 1 });
+      if (i < 3) await BlockInstance.updateOne({ _id: sport!._id }, { status: 'done' });
+    }
+    setNow('2026-11-29T09:00:00Z'); // Pazar 12:00
+    token = await loginToken(app);
+    for (const [i, date] of days.entries()) {
+      await call('PUT', `/journal/${date}`, {
+        mood: i < 3 ? 4 : 1,
+        energy: i < 3 ? 4 : 1,
+        tags: i < 3 ? ['kod'] : ['yorgunluk'],
+      });
+    }
+    // Pazar öğlen: Almanca (15:00) henüz kaçmadı
+    const sun = await call('PUT', '/journal/2026-11-29', { mood: 2 });
+    expect(sun.json()).toMatchObject({ mood: 2 });
+    let today = await JournalEntry.findOne({ date: '2026-11-29' });
+    expect(today!.daySnapshot!.blocksMissed).toBe(1); // yalnız 07:00 bisiklet
+
+    const res = await call('GET', '/journal/insights?range=week&date=2026-11-25');
+    expect(res.statusCode).toBe(200);
+    const r = journalInsightsSchema.parse(res.json());
+    expect(r.range).toBe('2026-11-23..2026-11-29');
+    expect(r.entries).toBe(7);
+    expect(r.moodWhenSportDone).toBe(4);
+    expect(r.moodWhenSportMissed).toBe(1.3);
+    expect(r.completionByEnergy).toEqual({ high: 0.5, low: 0 });
+    expect(r.mostMissedCategory).toBe('language');
+    expect(r.mostMissedTimeSlot).toBe('14:00-16:00');
+    expect(r.streaks.journal).toBe(7);
+    expect(r.streaks.sport).toBe(0);
+    expect(r.days).toHaveLength(7);
+    expect(r.findings.length).toBeGreaterThan(0);
+
+    // ertesi gün: pazarın görüntüsü kesinleşir (Almanca da kaçmış olur)
+    setNow('2026-11-30T09:00:00Z');
+    token = await loginToken(app);
+    await call('GET', '/journal/insights?range=week&date=2026-11-29');
+    today = await JournalEntry.findOne({ date: '2026-11-29' });
+    expect(today!.daySnapshot!.blocksMissed).toBe(2);
+
+    expect((await call('GET', '/journal/insights?range=year')).statusCode).toBe(400);
   });
 });

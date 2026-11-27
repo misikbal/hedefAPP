@@ -23,6 +23,7 @@ export const MCP_TOOLS = [
   'resolve_penalty',
   'write_journal',
   'get_journal',
+  'get_journal_insights',
   'undo_last_change',
   'add_transaction',
   'list_transactions',
@@ -44,6 +45,8 @@ export const mcpPermissionsSchema = z.object({
   penaltyRuleWrite: z.enum(MCP_PERMISSION_MODES),
   /** get_journal yalnızca açıkken çalışır */
   journalRead: z.boolean(),
+  /** Claude'un yazdığı günlükte kullanıcının kendi cümlesi (rawNote) saklansın mı */
+  journalRawNote: z.boolean(),
 });
 export type McpPermissions = z.infer<typeof mcpPermissionsSchema>;
 

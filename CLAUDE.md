@@ -30,6 +30,8 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - Faz 6 — MCP (Claude): kodlandı (2026-11-26), kullanıcı onayı bekleniyor. Kararlar aşağıda.
 - Para takibi (2026-11-26): kodlandı, kullanıcı onayı bekleniyor. Kararlar aşağıda.
 - Faz 8 — Widget ve Strava: kodlandı (2026-11-26), kullanıcı onayı bekleniyor. MCP OAuth (Aşama 2) yapılmadı.
+- Yatay odak (masa saati): kodlandı (2026-11-26), cihazda denenmedi, kullanıcı onayı bekleniyor. Kararlar aşağıda.
+- Günlük analizi (2026-11-27): kodlandı, kullanıcı onayı bekleniyor. Hava durumu önerisi yapılmadı. Kararlar aşağıda.
 
 ## Notlar
 
@@ -132,3 +134,26 @@ Ekran ayrıntıları: [tasarım_dokumani.md](tasarım_dokumani.md) ve `Kişisel 
 - Bütçe bildirimi: harcama eklenince (yalnız içinde bulunulan ay) toplam/kategori limitinin %80'ine ve aşımına ulaşılırsa `budget_alert` (reminder türü, ayar anahtarına bağlı değil); `dedupeKey = budget:<ay>:<kategori|total>:<warn|over>` → ayda her eşik bir kez.
 - MCP: `add_transaction`, `list_transactions`, `get_money_summary`, `set_budget` (toplam 20 araç). Doğrudan uygulanır; AuditLog/geri al/onay akışına girmez, silme MCP'de yok (yalnız uygulamadan). `source:'mcp'` ile işaretlenir.
 - `GET /export` artık `transactions` ve `budgets` içerir. Ceza kuralı bağlantısı ve haftalık rapora ekleme yapılmadı.
+
+## Yatay odak kararları (2026-11-26, onay bekliyor)
+
+- Odak sekmesi açıkken telefon yan yatınca `StandByView` açılır (tasarım örneği: Artifact "Yatay Odak Önerisi"). Şarja takınca açılma yok (expo-battery eklenmedi). Çıkış: dikeye çevirmek.
+- Yeni paketler (onaylı): `expo-screen-orientation` (kilit), `expo-keep-awake` (yatayken ekran uyumaz). Native: development build yeniden alınmalı.
+- Yön: `app.config.ts` `orientation: 'default'`; dikey kilit kodda (`features/focus/orientation.ts`): kökte `lockPortrait()`, Odak sekmesi odaktayken `unlockOrientation()`, sekmeden çıkınca yine kilit. Yatay algısı `useWindowDimensions` (en > boy). Sekme çubuğu `store/standbyStore.ts` ile gizlenir.
+- Gündüz: solda saat + kalan süre kartı, sağda yuvarlak köşeli dağ penceresi (%42/%58). Gece (22:00–06:00, `isNightHour`): ekran tam ortadan ikiye bölünür, sol yarıda saat/dakika alt alta en büyük boyda, sağ yarıda kısılmış dağ + kalan süre kartı. Renkler temadan bağımsız (koyu).
+- Sahne `StandByScene.tsx`: arazi, dağ, patika ve hareketler MountainClimb ile aynı (`MountainClimb.tsx` parçaları dışarı açıldı; `LevelScene`'e `standby` bayrağı). Tek saat 24 sn, ilerleme 900 ms, bayrak 900 ms, konfeti 1800 ms, hareketi azalt = saat 0. Nokta yerine `Budgie.tsx` (sarı muhabbet kuşu); dikey ekrandaki MountainClimb değişmedi (nokta kalır).
+- Kamera = animasyonlu `viewBox` (`useFrameCallback` tek döngü: saat, ilerleme, kamera, kuş). Hesaplar `standbyMath.ts` (testli): yakınlık 1 (bütün arazi) – 30 (kuş), çift dokunuş değiştirir; zirvede en çok 3,5×. Kuş boyu dağın ~1/70'i (gerçek oran görünmez). Çizgiler 3×'ten sonra yakınlıkla ters orantılı incelir, iğneler söner. Kuş ayrı Svg + `Animated.View` (ölçek/yön/zıplama), kanat ve kuyruk `d` ile oynar. Kuşa özel hareketler 24 sn'nin tam bölenleri (zıplama 24×, kanat 120×, nefes 8×, göz kırpma 6×, z z z 10×).
+- Ekran açık kalma: seans `running` iken her yönde (`FocusLifecycle`, etiket `focus-session`); duraklatılınca ve molada normal uyku. Yatay masa saati ayrıca her zaman açık tutar.
+- Dokununca Duraklat/Devam düğmesi 4 sn görünür; seans yokken Başlat hep görünür.
+- Doğrulanamayanlar (yalnızca cihazda): animasyonlu `viewBox` ve `transformOrigin`'li kuş `View`'ı, titreme, ekran dönüşünde sekme çubuğu/durum çubuğu davranışı.
+
+## Günlük analizi kararları (2026-11-27, onay bekliyor)
+
+- İlke: sayıları sunucu hesaplar, yorumu Claude yapar. Hesap `@takip/shared → computeJournalInsights` (saf, DB'siz test), kural tabanlı bulgular `journalFindings` (en çok 3). Servis `services/journal.ts → journalInsights` yalnızca veri toplar.
+- `JournalEntry` yeni alanlar: `energy` (0–4, null), `tags` (en çok 5, küçük harf; öneri listesi `JOURNAL_TAGS` dışındakiler `other:` önekli, reddedilmez), `summary` (≤200), `rawNote`, `source` ('app'|'claude', yalnız ilk kayıtta yazılır = kaydı ilk kim yazdı), `daySnapshot`.
+- PUT anlamı: mood + üç metin her seferinde yazılır; yeni alanlar gönderilmezse korunur (eski istemci ve kısmi Claude yazımı bozulmaz), null/[] temizler.
+- `daySnapshot` her yazımda yeniden alınır (blocksPlanned/Done/Missed, missedCategories, missedStarts, sportDone — spor bloğu yoksa null —, goalProgress hedef adı → miktar, takenAt). Gün bitmeden alınan görüntü, gün kesinleşince (ertesi gün 00:00 + 30 dk) insights okunurken bir kez yenilenir; sonra donmuş kalır.
+- `GET /journal/insights?range=week|month&date=`: hafta pazartesi–pazar, ay takvim ayı. Karşılaştırmalar (spor var/yok ruh hâli, enerji düşük 0–1 / yüksek 3–4 tamamlama) grup başına en az 3 kayıt, yoksa null. Eğilim en az 4 kayıt, yarılar arası fark ≥ 0,5. Kaçan saat dilimi 2 saatlik, en az 2 kaçış. Tamamlama oranı ve gün çubukları canlı bloklardan (`done/(done+missed)`), korelasyonlar anlık görüntülerden. Seriler: günlük (bugünkü yazılmadıysa dünden), spor (art arda yapılan spor blokları). `lowMoodStreak`: son ardışık mood ≤ 1 kayıtlar.
+- MCP: `write_journal` genişletildi (energy, tags, summary, rawNote; Claude kuralları açıklamada), `get_journal_insights` eklendi (21 araç; `days` dizisi Claude'a gönderilmez). İkisi de doğrudan uygulanır; insights `journalRead` izni ister. Yeni izin `mcpPermissions.journalRawNote` (varsayılan açık): kapalıyken Claude'un rawNote'u atılır.
+- Mobil: Günlük formuna enerji, tek cümle özet, etiketler; "Claude ile yazıldı / Elle" rozeti ve saklanan kullanıcı cümlesi; "Bu hafta" kartı (ruh hâli + enerji çizgisi, tamamlama çubukları, bulgular, sık 5 etiket). Claude ekranında "Günlükte kendi cümlemi sakla" anahtarı.
+- Yapılmadı: düşük ruh hâli günlerinde ceza bildirimini yumuşatma, yedek şifreleme (Coolify tarafı), MCP OAuth, hava durumu önerisi.

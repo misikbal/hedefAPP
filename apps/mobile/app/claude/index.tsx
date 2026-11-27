@@ -354,6 +354,15 @@ function PermissionsSection({ permissions }: { permissions: McpPermissions }) {
       sub: permissions.journalRead ? 'Açık' : 'Kapalı',
       set: (v: boolean) => update.mutate({ mcpPermissions: { journalRead: v } }),
     },
+    {
+      key: 'journalRawNote' as const,
+      label: 'Günlükte kendi cümlemi sakla',
+      on: permissions.journalRawNote,
+      sub: permissions.journalRawNote
+        ? 'Claude anlattığını kısaltıp saklar'
+        : 'Yalnız doldurulan alanlar saklanır',
+      set: (v: boolean) => update.mutate({ mcpPermissions: { journalRawNote: v } }),
+    },
   ];
   return (
     <View style={{ gap: 8 }}>
